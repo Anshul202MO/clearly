@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<title>Clearly — filter your thoughts</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300;1,9..144,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;width:100%;background:#1A1612;}
+#root{height:100%;width:100%;}
+textarea::placeholder{color:#6B6259;font-style:italic;}
+::-webkit-scrollbar{display:none;}
+@keyframes pulse{0%,100%{opacity:.6;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useContext,createContext,useEffect,useCallback}=React;
+
+// =============================================
+// YOUR API KEY — paste it between the quotes
+// =============================================
+const ANTHROPIC_KEY = "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";
+// =============================================
+
+const CONTEXTS=[
+  {id:"work",  label:"Work",  sub:"meetings, slack, feedback", tone:"Professional, direct, solution-focused. Remove blame and emotion."},
+  {id:"dating",label:"Dating",sub:"texts, dates, crushes",     tone:"Warm and genuine. Natural, not desperate. Remove try-hard energy."},
+  {id:"social",label:"Social",sub:"friends, in-person chats",  tone:"Conversational, relaxed, human. Short enough to say aloud."},
+  {id:"email", label:"Email", sub:"professional messages",     tone:"Polished, one clear ask, no fluff. Professional but not cold."},
+];
+
+const ARCHETYPES={
+  "over-explainer":{key:"over-explainer",label:"The Over-Sharer",emoji:"📖",color:"#E8A87C",tagline:"You lead with empathy, context, and about 40% too many words.",traits:["Empathetic","Thorough","Verbose"],tip:"Write it all out, then delete the first two sentences."},
+  terse:           {key:"terse",         label:"The Clammer",    emoji:"🔒",color:"#7C9EBE",tagline:"Under pressure you go quiet. What comes out is curt and often misread.",traits:["Efficient","Private","Guarded"],tip:"Add one warm sentence before your main point."},
+  qualifier:       {key:"qualifier",     label:"The Softener",   emoji:"🌿",color:"#8CBE8C",tagline:"You wrap every thought in cushions. The point is in there — somewhere.",traits:["Considerate","Diplomatic","Hedging"],tip:"Lead with the ask. Soften after."},
+  blunt:           {key:"blunt",         label:"The Steamroller",emoji:"⚡",color:"#BE9B7C",tagline:"You say exactly what you mean — sometimes before checking the moment.",traits:["Direct","Decisive","Unfiltered"],tip:"Add one line of context before you land the point."},
+};
+
+const QUIZ=[
+  {field:"communicationStyle",q:"When you're stressed, your messages tend to be…",opts:[
+    {val:"over-explainer",text:"Long. I explain everything, add context, then add more context."},
+    {val:"terse",         text:"Short. Too short. People think I'm annoyed when I'm just stressed."},
+    {val:"qualifier",     text:"Full of 'maybe', 'I think', 'just wondering if' — the point gets buried."},
+    {val:"blunt",         text:"Direct. Sometimes uncomfortably so."},
+  ]},
+  {field:"toneDefault",q:"In professional settings, you're usually…",opts:[
+    {val:"warm-casual",text:"Warm and friendly — probably too casual for the room."},
+    {val:"formal",     text:"Formal and stiff — it can feel impersonal."},
+    {val:"passive",    text:"Passive. I hedge a lot."},
+    {val:"direct",     text:"Confident — occasionally comes across as blunt."},
+  ]},
+  {field:"mainTrigger",q:"You're most likely to spiral when…",opts:[
+    {val:"conflict",  text:"There's conflict, tension, or I need to give hard feedback."},
+    {val:"romantic",  text:"It's romantic or social — stakes feel personal."},
+    {val:"authority", text:"I'm talking to someone with power over me."},
+    {val:"group",     text:"I'm in a group and feel like I'll be judged."},
+  ]},
+  {field:"afterSendFeeling",q:"After you hit send, you usually feel…",opts:[
+    {val:"overshared",  text:"Immediate regret. Did I say too much?"},
+    {val:"underplayed", text:"Worry. Was that too cold or short?"},
+    {val:"ruminator",   text:"Fine — until I re-read it three times later."},
+    {val:"pre-worry",   text:"Okay. The before is harder than the after."},
+  ]},
+  {field:"helpGoal",q:"What do you actually want help with?",opts:[
+    {val:"brevity",    text:"Saying less. I over-explain and I know it."},
+    {val:"warmth",     text:"Saying more. I come across as cold or terse."},
+    {val:"confidence", text:"Sounding confident — not apologetic."},
+    {val:"tone",       text:"Reading the room and matching my tone to it."},
+  ]},
+];
+
+function buildPersonality(ans){
+  const arch=ARCHETYPES[ans.communicationStyle]||ARCHETYPES.qualifier;
+  const tM={"warm-casual":"warm & casual",formal:"formal/stiff",passive:"passive/hedging",direct:"confident & direct"};
+  const tgM={conflict:"conflict & feedback",romantic:"romantic situations",authority:"authority figures",group:"group settings"};
+  const gM={brevity:"saying less",warmth:"adding warmth",confidence:"sounding confident",tone:"matching tone"};
+  const aM={overshared:"oversharing",underplayed:"being too cold",ruminator:"re-reading obsessively","pre-worry":"anticipation"};
+  const summary=[
+    `Archetype: "${arch.label}" — ${arch.tagline}`,
+    `Under stress they: ${ans.communicationStyle?.replace("-"," ")}.`,
+    `Default tone: ${tM[ans.toneDefault]||ans.toneDefault}.`,
+    `Overthinks in: ${tgM[ans.mainTrigger]||ans.mainTrigger}.`,
+    `After-send fear: ${aM[ans.afterSendFeeling]||ans.afterSendFeeling}.`,
+    `Goal: ${gM[ans.helpGoal]||ans.helpGoal}.`,
+    `Tip: ${arch.tip}`,
+  ].join(" ");
+  return{...ans,archetypeKey:arch.key,archetypeLabel:arch.label,archetypeTagline:arch.tagline,aiPromptSummary:summary,completed:true};
+}
+
+const defaultP={communicationStyle:null,toneDefault:null,mainTrigger:null,afterSendFeeling:null,helpGoal:null,archetypeKey:null,completed:false,aiPromptSummary:null};
+
+const AC=createContext(null);
+const useApp=()=>useContext(AC);
+
+function AppProvider({children}){
+  const [screen,     setScreen]     = useState("splash");
+  const [personality,setPersonality]= useState(defaultP);
+  const [ctx,        setCtx]        = useState(CONTEXTS[0]);
+  const [raw,        setRaw]        = useState("");
+  const [result,     setResult]     = useState(null);
+  const [loading,    setLoading]    = useState(false);
+  const [genError,   setGenError]   = useState(null);
+  const [history,    setHistory]    = useState([]);
+
+  useEffect(()=>{
+    try{
+      const p=localStorage.getItem("clr_p");
+      if(p){const j=JSON.parse(p);if(j?.completed){setPersonality(j);setScreen("main");}}
+      const h=localStorage.getItem("clr_h");
+      if(h)setHistory(JSON.parse(h)||[]);
+    }catch(_){}
+  },[]);
+
+  const go=useCallback((to)=>setScreen(to),[]);
+
+  const completeOnboarding=useCallback((ans)=>{
+    const full=buildPersonality(ans);
+    setPersonality(full);
+    try{localStorage.setItem("clr_p",JSON.stringify(full));}catch(_){}
+    setScreen("reveal");
+  },[]);
+
+  const generate=useCallback(async(currentRaw,currentCtx,currentPersonality)=>{
+    if(!currentRaw.trim())return;
+    setResult(null);
+    setGenError(null);
+    setLoading(true);
+    setScreen("output");
+    try{
+      if(!ANTHROPIC_KEY||ANTHROPIC_KEY===""){
+        setGenError("No API key found. Open index.html, find the line that says ANTHROPIC_KEY = \"\" and paste your key between the quotes.");
+        return;
+      }
+      const system=[
+        "You are Clearly — a communication filter for overthinkers.",
+        "Take the user's raw unfiltered thought and rewrite it into a clear, appropriate message for their context.",
+        "",
+        `USER PERSONALITY: ${currentPersonality.aiPromptSummary||"General overthinker."}`,
+        "",
+        `CONTEXT: ${currentCtx.label}`,
+        `TONE: ${currentCtx.tone}`,
+        "",
+        "RULES:",
+        "- Read the actual intention behind what they wrote, not just the surface words.",
+        "- If the message is negative (anger, rejection, frustration) — soften it without losing the meaning. Example: 'I hate you and think you are a creep' in a dating context becomes something like 'I don't think we are a good fit. I wish you well.'",
+        "- If the message is positive — make it warmer and more natural.",
+        "- If they are over-explaining — cut ruthlessly. Keep only the core point.",
+        "- If they are too terse — add one warm human sentence.",
+        "- If they are hedging — remove the qualifiers and state it directly.",
+        "- If they are too blunt — soften the delivery without changing the message.",
+        "- Match length to context: short for dating/social, longer for work/email.",
+        "- NEVER return a generic response. The output must clearly reflect what the user actually typed.",
+        "",
+        "Return ONLY valid JSON with no markdown or extra text:",
+        '{"refined":"the complete rewritten message","toneLabel":"Word · Word · Word","explanation":"one sentence: what you changed and why"}',
+      ].join("\n");
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "x-api-key":ANTHROPIC_KEY,
+          "anthropic-version":"2023-06-01",
+          "anthropic-dangerous-direct-browser-access":"true",
+        },
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:800,
+          system,
+          messages:[{role:"user",content:currentRaw}],
+        }),
+      });
+      const data=await res.json();
+      if(data.error)throw new Error(data.error.message);
+      const text=(data.content||[]).map(b=>b.text||"").join("");
+      const parsed=JSON.parse(text.replace(/```json|```/g,"").trim());
+      setResult(parsed);
+      setHistory(h=>{
+        const entry={id:Date.now(),ctx:currentCtx,raw:currentRaw,refined:parsed.refined,toneLabel:parsed.toneLabel,ts:new Date().toISOString()};
+        const u=[entry,...h].slice(0,30);
+        try{localStorage.setItem("clr_h",JSON.stringify(u));}catch(_){}
+        return u;
+      });
+    }catch(e){
+      setGenError("Something went wrong: "+(e.message||"check your API key and try again."));
+      console.error(e);
+    }finally{
+      setLoading(false);
+    }
+  },[]);
+
+  const reset=useCallback(()=>{
+    setPersonality(defaultP);setResult(null);setRaw("");setGenError(null);
+    try{localStorage.removeItem("clr_p");}catch(_){}
+    setScreen("splash");
+  },[]);
+
+  return(
+    <AC.Provider value={{screen,go,personality,completeOnboarding,reset,ctx,setCtx,raw,setRaw,result,loading,genError,generate,history}}>
+      {children}
+    </AC.Provider>
+  );
+}
+
+const D={
+  bg:"#0D0C0B",bg2:"#141210",surface:"#1C1917",surf2:"#252119",
+  accent:"#D4845A",accentD:"#B86B42",
+  cream:"#F0E8DC",cream2:"#B8AC9E",cream3:"#6B6259",
+  border:"rgba(240,232,220,0.08)",border2:"rgba(240,232,220,0.04)",
+  serif:"'Fraunces',Georgia,serif",sans:"'DM Sans',sans-serif",
+};
+
+function PBtn({children,onClick,disabled,style={}}){
+  const [h,setH]=useState(false);
+  return(
+    <button onClick={onClick} disabled={disabled}
+      onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+      style={{background:disabled?D.surf2:h?D.accentD:D.accent,color:disabled?D.cream3:"#fff",border:"none",borderRadius:14,padding:"16px 28px",fontFamily:D.sans,fontSize:15,fontWeight:500,cursor:disabled?"not-allowed":"pointer",transition:"all .2s",...style}}>
+      {children}
+    </button>
+  );
+}
+
+function GBtn({children,onClick,style={}}){
+  const [h,setH]=useState(false);
+  return(
+    <button onClick={onClick}
+      onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+      style={{background:h?D.surf2:"transparent",color:D.cream2,border:`1px solid ${D.border}`,borderRadius:10,padding:"11px 20px",fontFamily:D.sans,fontSize:13,cursor:"pointer",transition:"all .2s",...style}}>
+      {children}
+    </button>
+  );
+}
+
+function Ambient({color=D.accent}){
+  return(
+    <div style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none",zIndex:0}}>
+      <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:`radial-gradient(circle,${color}1A 0%,transparent 70%)`,top:"50%",left:"50%",transform:"translate(-50%,-50%)",animation:"pulse 6s ease-in-out infinite"}}/>
+      <div style={{position:"absolute",width:260,height:260,borderRadius:"50%",background:`radial-gradient(circle,${color}0D 0%,transparent 70%)`,top:"12%",right:"8%",animation:"pulse 9s ease-in-out infinite reverse"}}/>
+    </div>
+  );
+}
+
+function Splash(){
+  const {go}=useApp();
+  const [v,setV]=useState(false);
+  useEffect(()=>{setTimeout(()=>setV(true),100);},[]);
+  return(
+    <div style={{position:"relative",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",padding:"40px 32px",textAlign:"center"}}>
+      <Ambient/>
+      <div style={{position:"relative",zIndex:1,opacity:v?1:0,transform:v?"translateY(0)":"translateY(24px)",transition:"all .7s ease"}}>
+        <div style={{width:60,height:60,borderRadius:18,background:`linear-gradient(135deg,${D.accent},${D.accentD})`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 24px",boxShadow:`0 8px 32px ${D.accent}40`}}>
+          <span style={{fontSize:28,color:"#fff"}}>✦</span>
+        </div>
+        <div style={{fontFamily:D.serif,fontSize:52,fontWeight:300,color:D.cream,lineHeight:1,letterSpacing:"-0.02em",marginBottom:20}}>
+          Clear<em style={{fontStyle:"italic",color:D.accent}}>ly</em>
+        </div>
+        <p style={{fontFamily:D.sans,fontSize:17,color:D.cream2,lineHeight:1.65,maxWidth:280,margin:"0 auto 48px",fontWeight:300}}>
+          A filter for overthinkers.<br/>Say what you mean — clearly.
+        </p>
+        <PBtn onClick={()=>go("quiz")} style={{width:"100%",maxWidth:260,padding:"18px 32px",fontSize:16}}>
+          Get started
+        </PBtn>
+        <p style={{fontFamily:D.sans,fontSize:12,color:D.cream3,marginTop:18}}>5 quick questions · ~1 min</p>
+      </div>
+    </div>
+  );
+}
+
+function Quiz(){
+  const {completeOnboarding}=useApp();
+  const [step,setStep]=useState(0);
+  const [answers,setAnswers]=useState({});
+  const [sel,setSel]=useState(null);
+  const [animIn,setAnimIn]=useState(true);
+  const [dir,setDir]=useState(1);
+  const total=QUIZ.length;
+  const current=QUIZ[step];
+  const anim=(d,cb)=>{setAnimIn(false);setDir(d);setTimeout(()=>{cb();setAnimIn(true);},240);};
+  const choose=(val)=>{
+    setSel(val);
+    setTimeout(()=>{
+      const a={...answers,[current.field]:val};
+      setAnswers(a);
+      if(step<total-1){anim(1,()=>{setStep(s=>s+1);setSel(null);});}
+      else{completeOnboarding(a);}
+    },400);
+  };
+  const back=()=>{
+    if(!step)return;
+    anim(-1,()=>{const p=step-1;setStep(p);setSel(answers[QUIZ[p].field]||null);});
+  };
+  const slide={opacity:animIn?1:0,transform:animIn?"translateX(0)":`translateX(${dir*20}px)`,transition:"opacity .24s ease,transform .24s ease"};
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",position:"relative"}}>
+      <Ambient/>
+      <div style={{position:"relative",zIndex:1,padding:"28px 28px 0",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <button onClick={back} style={{background:"none",border:"none",color:step===0?"transparent":D.cream2,cursor:step===0?"default":"pointer",fontFamily:D.sans,fontSize:13,padding:0,transition:"color .2s"}}>← back</button>
+          <span style={{fontFamily:D.sans,fontSize:12,color:D.cream3,letterSpacing:"0.04em"}}>{step+1} / {total}</span>
+        </div>
+        <div style={{height:2,background:D.border,borderRadius:2,overflow:"hidden"}}>
+          <div style={{height:"100%",width:`${((step+1)/total)*100}%`,background:D.accent,borderRadius:2,transition:"width .4s ease"}}/>
+        </div>
+      </div>
+      <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"center",padding:"32px 28px 28px",position:"relative",zIndex:1}}>
+        <div style={slide}>
+          <p style={{fontFamily:D.serif,fontSize:26,fontWeight:300,color:D.cream,lineHeight:1.4,marginBottom:32,letterSpacing:"-0.01em"}}>{current.q}</p>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {current.opts.map(opt=>{
+              const on=sel===opt.val;
+              return(
+                <div key={opt.val} onClick={()=>choose(opt.val)}
+                  style={{padding:"15px 18px",background:on?`${D.accent}1A`:D.surface,border:`1px solid ${on?D.accent:D.border}`,borderRadius:14,cursor:"pointer",transition:"all .18s",display:"flex",alignItems:"center",gap:14}}>
+                  <div style={{width:18,height:18,borderRadius:"50%",border:`1.5px solid ${on?D.accent:D.cream3}`,background:on?D.accent:"transparent",flexShrink:0,transition:"all .18s",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    {on&&<div style={{width:6,height:6,borderRadius:"50%",background:"#fff"}}/>}
+                  </div>
+                  <span style={{fontFamily:D.sans,fontSize:14,color:on?D.cream:D.cream2,lineHeight:1.5,fontWeight:on?500:400}}>{opt.text}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Reveal(){
+  const {go,personality}=useApp();
+  const arch=ARCHETYPES[personality.archetypeKey]||ARCHETYPES.qualifier;
+  const [phase,setPhase]=useState(0);
+  useEffect(()=>{
+    const t1=setTimeout(()=>setPhase(1),150);
+    const t2=setTimeout(()=>setPhase(2),650);
+    const t3=setTimeout(()=>setPhase(3),1150);
+    return()=>{clearTimeout(t1);clearTimeout(t2);clearTimeout(t3);};
+  },[]);
+  const f=(show,delay="0s")=>({opacity:show?1:0,transform:show?"translateY(0)":"translateY(16px)",transition:`all .6s ease ${delay}`});
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",position:"relative",alignItems:"center",justifyContent:"center",padding:"40px 28px",textAlign:"center",overflowY:"auto"}}>
+      <Ambient color={arch.color}/>
+      <div style={{position:"relative",zIndex:1,width:"100%"}}>
+        <div style={{...f(phase>=1),marginBottom:24}}>
+          <div style={{width:80,height:80,borderRadius:"50%",background:`${arch.color}22`,border:`1.5px solid ${arch.color}60`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",boxShadow:`0 0 48px ${arch.color}30`}}>
+            <span style={{fontSize:36}}>{arch.emoji}</span>
+          </div>
+        </div>
+        <div style={{...f(phase>=2)}}>
+          <p style={{fontFamily:D.sans,fontSize:11,fontWeight:500,letterSpacing:"0.12em",textTransform:"uppercase",color:D.cream3,marginBottom:8}}>You are</p>
+          <h1 style={{fontFamily:D.serif,fontSize:36,fontWeight:300,color:D.cream,lineHeight:1.1,letterSpacing:"-0.01em",marginBottom:14}}>{arch.label}</h1>
+          <p style={{fontFamily:D.sans,fontSize:14,color:D.cream2,lineHeight:1.65,maxWidth:300,margin:"0 auto"}}>{arch.tagline}</p>
+        </div>
+        <div style={{...f(phase>=3),marginTop:28}}>
+          <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:20}}>
+            {arch.traits.map(t=><span key={t} style={{fontFamily:D.sans,fontSize:11,fontWeight:500,color:arch.color,background:`${arch.color}18`,border:`1px solid ${arch.color}40`,borderRadius:20,padding:"4px 12px"}}>{t}</span>)}
+          </div>
+          <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:14,padding:"14px 18px",marginBottom:28,textAlign:"left"}}>
+            <p style={{fontFamily:D.sans,fontSize:10,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Your move</p>
+            <p style={{fontFamily:D.sans,fontSize:14,color:D.cream2,lineHeight:1.6}}>{arch.tip}</p>
+          </div>
+          <PBtn onClick={()=>go("main")} style={{width:"100%"}}>Start filtering →</PBtn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Main(){
+  const {personality,ctx,setCtx,raw,setRaw,generate,reset}=useApp();
+  const arch=personality.completed?ARCHETYPES[personality.archetypeKey]:null;
+  const [showP,setShowP]=useState(false);
+  const MAX=800;
+  const handleFilter=()=>generate(raw,ctx,personality);
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",position:"relative"}}>
+      <Ambient/>
+      <div style={{position:"relative",zIndex:2,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"22px 24px 0",flexShrink:0}}>
+        <div style={{fontFamily:D.serif,fontSize:22,fontWeight:300,color:D.cream,letterSpacing:"-0.01em"}}>
+          Clear<em style={{fontStyle:"italic",color:D.accent}}>ly</em>
+        </div>
+        {arch&&(
+          <button onClick={()=>setShowP(p=>!p)} style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:20,padding:"6px 14px 6px 10px",display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
+            <span style={{fontSize:15}}>{arch.emoji}</span>
+            <span style={{fontFamily:D.sans,fontSize:12,color:D.cream2,fontWeight:500}}>{arch.label}</span>
+          </button>
+        )}
+      </div>
+      {showP&&(
+        <div style={{position:"absolute",top:66,right:20,zIndex:10,background:D.bg2,border:`1px solid ${D.border}`,borderRadius:16,padding:20,width:230,boxShadow:"0 16px 48px #00000080"}}>
+          <p style={{fontFamily:D.sans,fontSize:10,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>Your profile</p>
+          {[["Style",personality.communicationStyle?.replace("-"," ")||"—"],["Tone",personality.toneDefault?.replace("-"," ")||"—"],["Trigger",personality.mainTrigger||"—"],["Goal",personality.helpGoal||"—"]].map(([l,v])=>(
+            <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${D.border2}`}}>
+              <span style={{fontFamily:D.sans,fontSize:12,color:D.cream3}}>{l}</span>
+              <span style={{fontFamily:D.sans,fontSize:12,color:D.cream,fontWeight:500,textTransform:"capitalize"}}>{v}</span>
+            </div>
+          ))}
+          <button onClick={()=>{setShowP(false);reset();}} style={{marginTop:14,fontFamily:D.sans,fontSize:12,color:D.cream3,background:"none",border:"none",cursor:"pointer",padding:0}}>Retake quiz →</button>
+        </div>
+      )}
+      <div style={{flex:1,overflowY:"auto",padding:"28px 24px 28px",position:"relative",zIndex:1,display:"flex",flexDirection:"column",scrollbarWidth:"none"}}>
+        <div style={{marginBottom:24}}>
+          <h2 style={{fontFamily:D.serif,fontSize:30,fontWeight:300,color:D.cream,lineHeight:1.25,letterSpacing:"-0.01em",marginBottom:6}}>
+            What do you<br/>want to <em style={{fontStyle:"italic",color:D.accent}}>say?</em>
+          </h2>
+          {arch&&<p style={{fontFamily:D.sans,fontSize:13,color:D.cream3}}>We'll filter it for you, {arch.label.toLowerCase()}.</p>}
+        </div>
+        <div style={{marginBottom:20}}>
+          <p style={{fontFamily:D.sans,fontSize:10,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>Situation</p>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {CONTEXTS.map(c=>{
+              const on=ctx.id===c.id;
+              return(
+                <button key={c.id} onClick={()=>setCtx(c)}
+                  style={{padding:"8px 16px",background:on?D.accent:D.surface,border:`1px solid ${on?D.accent:D.border}`,borderRadius:20,fontFamily:D.sans,fontSize:13,fontWeight:on?500:400,color:on?"#fff":D.cream2,cursor:"pointer",transition:"all .18s"}}>
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
+          <p style={{fontFamily:D.sans,fontSize:11,color:D.cream3,marginTop:6}}>{ctx.sub}</p>
+        </div>
+        <div style={{flex:1,display:"flex",flexDirection:"column",gap:14}}>
+          <textarea
+            value={raw}
+            onChange={e=>setRaw(e.target.value.slice(0,MAX))}
+            placeholder={"Just start typing, don't overthink it…\n\nI want to tell my manager the deadline isn't realistic but I don't want to seem difficult and maybe I'm wrong but Sarah also hasn't sent the files and…"}
+            style={{flex:1,minHeight:180,background:D.surface,border:`1px solid ${D.border}`,borderRadius:16,padding:"18px 20px",fontFamily:D.sans,fontSize:15,color:D.cream,resize:"none",outline:"none",lineHeight:1.7,transition:"border-color .2s",scrollbarWidth:"none"}}
+            onFocus={e=>e.target.style.borderColor=`${D.accent}80`}
+            onBlur={e=>e.target.style.borderColor=D.border}
+          />
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <span style={{fontFamily:D.sans,fontSize:11,color:D.cream3}}>{raw.length}/{MAX}</span>
+            <PBtn onClick={handleFilter} disabled={!raw.trim()} style={{padding:"14px 28px"}}>Filter it →</PBtn>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Output(){
+  const {go,ctx,raw,result,loading,genError,generate,personality}=useApp();
+  const [copied,setCopied]=useState(false);
+  const arch=personality.completed?ARCHETYPES[personality.archetypeKey]:null;
+  const copy=async()=>{
+    if(!result?.refined)return;
+    try{await navigator.clipboard.writeText(result.refined);setCopied(true);setTimeout(()=>setCopied(false),2200);}catch(_){}
+  };
+  const regen=()=>generate(raw,ctx,personality);
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%",position:"relative"}}>
+      <Ambient color={arch?.color||D.accent}/>
+      <div style={{position:"relative",zIndex:2,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"22px 24px 0",flexShrink:0}}>
+        <button onClick={()=>go("main")} style={{background:"none",border:"none",fontFamily:D.sans,fontSize:13,color:D.cream2,cursor:"pointer",padding:0}}>← Edit</button>
+        <span style={{fontFamily:D.sans,fontSize:11,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.06em"}}>{ctx.label}</span>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"24px 24px 36px",position:"relative",zIndex:1,scrollbarWidth:"none"}}>
+        {loading&&(
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"70%",gap:16}}>
+            <div style={{width:36,height:36,borderRadius:"50%",border:`2px solid ${D.border}`,borderTop:`2px solid ${D.accent}`,animation:"spin 1s linear infinite"}}/>
+            <p style={{fontFamily:D.sans,fontSize:13,color:D.cream3}}>Filtering your thought…</p>
+          </div>
+        )}
+        {!loading&&genError&&(
+          <div style={{padding:24,background:D.surface,borderRadius:16,border:`1px solid ${D.border}`,marginTop:20}}>
+            <p style={{fontFamily:D.sans,fontSize:14,color:"#E08080",lineHeight:1.6,marginBottom:16}}>{genError}</p>
+            <GBtn onClick={regen}>Try again</GBtn>
+          </div>
+        )}
+        {!loading&&!genError&&result&&(
+          <div>
+            <h2 style={{fontFamily:D.serif,fontSize:28,fontWeight:300,color:D.cream,lineHeight:1.25,letterSpacing:"-0.01em",marginBottom:6}}>
+              Here's what<br/>to <em style={{fontStyle:"italic",color:D.accent}}>say.</em>
+            </h2>
+            <div style={{display:"inline-flex",alignItems:"center",gap:8,marginBottom:22,marginTop:6}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:"#6BBF8E"}}/>
+              <span style={{fontFamily:D.sans,fontSize:12,color:D.cream3}}>{result.toneLabel}</span>
+            </div>
+            <div style={{background:`linear-gradient(135deg,${D.surface} 0%,${D.surf2} 100%)`,border:`1px solid ${D.accent}40`,borderRadius:18,padding:"22px 20px",marginBottom:14,boxShadow:`0 4px 24px ${D.accent}15`}}>
+              <p style={{fontFamily:D.sans,fontSize:10,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>Filtered version</p>
+              <p style={{fontFamily:D.sans,fontSize:15,color:D.cream,lineHeight:1.8,whiteSpace:"pre-wrap"}}>{result.refined}</p>
+            </div>
+            {result.explanation&&(
+              <p style={{fontFamily:D.sans,fontSize:13,color:D.cream3,lineHeight:1.6,marginBottom:18,fontStyle:"italic"}}>✦ {result.explanation}</p>
+            )}
+            <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:14,padding:"14px 18px",marginBottom:22}}>
+              <p style={{fontFamily:D.sans,fontSize:10,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>Your original</p>
+              <p style={{fontFamily:D.sans,fontSize:13,color:D.cream3,lineHeight:1.65,fontStyle:"italic"}}>{raw}</p>
+            </div>
+            <div style={{display:"flex",gap:10,marginBottom:16}}>
+              <PBtn onClick={copy} style={{flex:1,padding:"14px 16px"}}>{copied?"Copied ✓":"Copy"}</PBtn>
+              <GBtn onClick={regen} style={{flex:1,padding:"14px 16px"}}>Regenerate</GBtn>
+            </div>
+            <div style={{textAlign:"center"}}>
+              <button onClick={()=>go("main")} style={{background:"none",border:"none",fontFamily:D.sans,fontSize:13,color:D.cream3,cursor:"pointer"}}>Start over</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Shell(){
+  const {screen}=useApp();
+  const map={splash:<Splash/>,quiz:<Quiz/>,reveal:<Reveal/>,main:<Main/>,output:<Output/>};
+  return(
+    <div style={{width:"100%",height:"100%",background:D.bg,position:"relative",overflow:"hidden"}}>
+      <style>{`
+        @keyframes pulse{0%,100%{opacity:.6;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.07)}}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        *{box-sizing:border-box;}
+        textarea{scrollbar-width:none;}
+        textarea::placeholder{color:#6B6259;font-style:italic;}
+        ::-webkit-scrollbar{display:none;}
+        button{-webkit-tap-highlight-color:transparent;}
+      `}</style>
+      {Object.entries(map).map(([k,el])=>(
+        <div key={k} style={{position:"absolute",inset:0,opacity:screen===k?1:0,transform:screen===k?"translateY(0)":"translateY(14px)",transition:"opacity .35s ease,transform .35s ease",pointerEvents:screen===k?"all":"none",overflow:"hidden"}}>
+          {el}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function App(){
+  const isMobile=window.innerWidth<=500;
+  if(isMobile){
+    return(
+      <div style={{height:"100vh",width:"100vw",background:D.bg}}>
+        <AppProvider><Shell/></AppProvider>
+      </div>
+    );
+  }
+  return(
+    <div style={{minHeight:"100vh",background:"#1A1612",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+      <div style={{width:400,height:"min(820px,92vh)",background:D.bg,borderRadius:36,overflow:"hidden",boxShadow:"0 32px 80px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.06)",position:"relative"}}>
+        <AppProvider><Shell/></AppProvider>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
