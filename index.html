@@ -24,10 +24,9 @@ textarea::placeholder{color:#6B6259;font-style:italic;}
 const {useState,useContext,createContext,useEffect,useCallback}=React;
 
 // =============================================
-// STEP 1 — PASTE YOUR GROQ API KEY BELOW
+// PASTE YOUR GROQ API KEY BETWEEN THE QUOTES
 // Get it free at: console.groq.com
-// No credit card needed
-// It starts with: gsk_
+// No credit card needed. Starts with: gsk_
 // =============================================
 const GROQ_KEY = "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";
 // =============================================
@@ -40,11 +39,72 @@ const CONTEXTS=[
 ];
 
 const ARCHETYPES={
-  "over-explainer":{key:"over-explainer",label:"The Over-Sharer",emoji:"📖",color:"#E8A87C",tagline:"You lead with empathy, context, and about 40% too many words.",traits:["Empathetic","Thorough","Verbose"],tip:"Write it all out, then delete the first two sentences."},
-  terse:           {key:"terse",         label:"The Clammer",    emoji:"🔒",color:"#7C9EBE",tagline:"Under pressure you go quiet. What comes out is curt and often misread.",traits:["Efficient","Private","Guarded"],tip:"Add one warm sentence before your main point."},
-  qualifier:       {key:"qualifier",     label:"The Softener",   emoji:"🌿",color:"#8CBE8C",tagline:"You wrap every thought in cushions. The point is in there — somewhere.",traits:["Considerate","Diplomatic","Hedging"],tip:"Lead with the ask. Soften after."},
-  blunt:           {key:"blunt",         label:"The Steamroller",emoji:"⚡",color:"#BE9B7C",tagline:"You say exactly what you mean — sometimes before checking the moment.",traits:["Direct","Decisive","Unfiltered"],tip:"Add one line of context before you land the point."},
+  "over-explainer":{key:"over-explainer",label:"The Over-Sharer",emoji:"📖",color:"#E8A87C",
+    tagline:"You lead with empathy, context, and about 40% too many words.",
+    traits:["Empathetic","Thorough","Verbose"],
+    tip:"Write it all out, then delete the first two sentences.",
+    exitStyle:"Give a detailed, story-based excuse. Add context, mention a name, include a callback. Make it believable because you over-explain naturally. Example style: 'Oh my god, I just got a text — my friend Maya is locked out of her flat and I'm literally the only one with a spare key. I'm so sorry, I have to run, can we pick this up later?'"},
+  terse:{key:"terse",label:"The Clammer",emoji:"🔒",color:"#7C9EBE",
+    tagline:"Under pressure you go quiet. What comes out is curt and often misread.",
+    traits:["Efficient","Private","Guarded"],
+    tip:"Add one warm sentence before your main point.",
+    exitStyle:"Give the shortest possible exit. One sentence, no explanation. Terse is your brand — use it. Example style: 'I have to go.' or 'Sorry, something came up.' Nothing more."},
+  qualifier:{key:"qualifier",label:"The Softener",emoji:"🌿",color:"#8CBE8C",
+    tagline:"You wrap every thought in cushions. The point is in there — somewhere.",
+    traits:["Considerate","Diplomatic","Hedging"],
+    tip:"Lead with the ask. Soften after.",
+    exitStyle:"Give a warm, apologetic excuse loaded with softeners. You naturally cushion everything — lean into it. Example style: 'I'm so sorry, I really hate to do this, but I just remembered I promised to help someone and I'd feel terrible letting them down — would you mind if I slipped away? I'm really sorry!'"},
+  blunt:{key:"blunt",label:"The Steamroller",emoji:"⚡",color:"#BE9B7C",
+    tagline:"You say exactly what you mean — sometimes before checking the moment.",
+    traits:["Direct","Decisive","Unfiltered"],
+    tip:"Add one line of context before you land the point.",
+    exitStyle:"Give a direct, unapologetic exit. No story needed. You don't owe anyone an explanation and you know it. Example style: 'I need to head off.' or 'I'm going to go now.' Delivered with confidence, not rudeness."},
 };
+
+// Exit situation categories — if message matches any of these, return exit excuses not rewrites
+const EXIT_CATEGORIES=`
+EXIT SITUATIONS — if the user's message matches any of the below, this is an EXIT scenario. Do NOT rewrite what they should say. Instead give 5 personality-matched exit excuses they can use to physically leave or disengage.
+
+CATEGORY 1 — PHYSICAL DISCOMFORT:
+- Someone has bad body odour, bad breath, or hygiene issues
+- Someone is standing too close or invading personal space
+- Someone is visibly sick and coughing on them
+- Someone touches them without consent
+- They are trapped in a hug that is going on too long
+
+CATEGORY 2 — SOCIALLY IMPOSSIBLE CONVERSATIONS:
+- Someone is extremely drunk or high and wants a deep talk
+- Someone is mid-meltdown or crying uncontrollably in public
+- Someone is on the verge of a fight and looking for an argument
+- A stranger is venting their life story and won't stop
+
+CATEGORY 3 — WORKPLACE LANDMINES:
+- Boss is wrong but it is not the right moment
+- Colleague is taking credit for their work in front of others
+- Someone is asking their salary or personal finances at work
+- HR is asking something they should not answer without a lawyer
+- A client is being inappropriate
+
+CATEGORY 4 — FAMILY AND RELATIONSHIP TRAPS:
+- A relative is asking when they are getting married or having kids
+- Someone is pushing unsolicited parenting or life advice
+- An ex is trying to restart a conversation they have closed
+- A family member is starting a political or religious argument at dinner
+- Someone asks their opinion on a terrible partner
+
+CATEGORY 5 — DATING AND SOCIAL AWKWARDNESS:
+- A date is going badly and they need to leave
+- Someone is flirting and they are not interested
+- A friend of a friend won't stop talking and they are stuck
+- Someone is clearly lying and they cannot call it out yet
+- Being asked to take sides in someone else's argument
+
+CATEGORY 6 — DIGITAL AND TEXT TRAPS:
+- Someone sends a long rant expecting a full response
+- A group chat blows up and they are being pulled in
+- Someone sends a passive-aggressive message
+- An old contact resurfaces wanting something
+`;
 
 const QUIZ=[
   {field:"communicationStyle",q:"When you're stressed, your messages tend to be…",opts:[
@@ -93,6 +153,7 @@ function buildPersonality(ans){
     `After-send fear: ${aM[ans.afterSendFeeling]||ans.afterSendFeeling}.`,
     `Goal: ${gM[ans.helpGoal]||ans.helpGoal}.`,
     `Tip: ${arch.tip}`,
+    `Exit excuse style: ${arch.exitStyle}`,
   ].join(" ");
   return{...ans,archetypeKey:arch.key,archetypeLabel:arch.label,archetypeTagline:arch.tagline,aiPromptSummary:summary,completed:true};
 }
@@ -138,32 +199,53 @@ function AppProvider({children}){
     setScreen("output");
     try{
       if(!GROQ_KEY||GROQ_KEY===""){
-        setGenError("No API key found. Open index.html on GitHub, find the line GROQ_KEY = \"\" and paste your Groq key between the quotes. Get a free key at console.groq.com");
+        setGenError("No API key found. Open index.html on GitHub, find GROQ_KEY = \"\" and paste your Groq key between the quotes.");
         return;
       }
 
+      const arch=ARCHETYPES[currentPersonality.archetypeKey]||ARCHETYPES.qualifier;
+
       const systemPrompt=[
-        "You are Clearly — a communication filter for overthinkers.",
-        "Take the user's raw unfiltered thought and rewrite it into a clear, appropriate message for their context.",
+        "You are Clearly — a witty, warm communication filter for overthinkers.",
+        "You help people say what they mean — clearly, confidently, and sometimes with a little humour.",
         "",
         `USER PERSONALITY: ${currentPersonality.aiPromptSummary||"General overthinker."}`,
+        `USER ARCHETYPE: ${arch.label}`,
         "",
         `CONTEXT: ${currentCtx.label}`,
         `TONE: ${currentCtx.tone}`,
         "",
-        "RULES:",
-        "- Read the actual intention behind what they wrote, not just the surface words.",
-        "- If the message is negative (anger, rejection, frustration) — soften it without losing the meaning. Example: 'I hate you and think you are a creep' in a dating context becomes 'I don't think we are a good fit. I wish you well.'",
-        "- If the message is positive — make it warmer and more natural.",
-        "- If they are over-explaining — cut ruthlessly. Keep only the core point.",
-        "- If they are too terse — add one warm human sentence.",
-        "- If they are hedging — remove the qualifiers and state it directly.",
-        "- If they are too blunt — soften the delivery without changing the message.",
-        "- Match length to context: short for dating/social, longer for work/email.",
-        "- NEVER return a generic response. The output must clearly reflect what the user actually typed.",
+        EXIT_CATEGORIES,
         "",
-        "You MUST respond with ONLY a valid JSON object. No explanation, no markdown, no code fences. Just raw JSON:",
-        '{"refined":"the complete rewritten message","toneLabel":"Word · Word · Word","explanation":"one sentence: what you changed and why"}',
+        "IF THIS IS AN EXIT SCENARIO:",
+        `Generate 5 exit excuses perfectly matched to the user's personality archetype: ${arch.label}.`,
+        `Their exit style: ${arch.exitStyle}`,
+        "Each excuse should feel like something THIS person would actually say — authentic to their communication style.",
+        "Vary the 5 excuses meaningfully: different scenarios, different lengths, different levels of detail.",
+        "The toneLabel for exits should be something like 'Smooth · Believable · Quick' or 'Warm · Apologetic · Clean'.",
+        "The explanation should be a short witty line about why this excuse works.",
+        "",
+        "IF THIS IS A NORMAL REWRITE SCENARIO:",
+        "TONE RULES:",
+        "- Be warm, human, and occasionally witty — not corporate or robotic.",
+        "- A little personality is good. Dry humour where appropriate.",
+        "- Never sound like a therapist or a LinkedIn post.",
+        "- Short is almost always better. Brevity is charm.",
+        "",
+        "REWRITING RULES:",
+        "- Read the actual intention behind what they wrote, not just the surface words.",
+        "- If negative — soften without losing the meaning.",
+        "- If positive — make it warmer and more natural.",
+        "- If over-explaining — cut ruthlessly. Keep only the core point.",
+        "- If too terse — add one warm human sentence.",
+        "- If hedging — remove qualifiers and state it directly.",
+        "- If too blunt — soften the delivery without changing the message.",
+        "- Match length to context: short for dating/social, longer for work/email.",
+        "- NEVER return a generic response. Always reflect what the user actually typed.",
+        "Generate EXACTLY 5 variations. Each must feel meaningfully different — vary the tone, length, angle, and approach. One might be formal, one casual, one with humour, one ultra-brief, one more detailed.",
+        "",
+        "IN BOTH CASES respond with ONLY a valid JSON object. No explanation, no markdown, no code fences:",
+        '{"isExit":true or false,"variations":[{"refined":"the message or excuse","toneLabel":"Word · Word · Word","explanation":"one punchy sentence"},{"refined":"...","toneLabel":"...","explanation":"..."},{"refined":"...","toneLabel":"...","explanation":"..."},{"refined":"...","toneLabel":"...","explanation":"..."},{"refined":"...","toneLabel":"...","explanation":"..."}]}',
       ].join("\n");
 
       const res=await fetch("https://api.groq.com/openai/v1/chat/completions",{
@@ -178,8 +260,8 @@ function AppProvider({children}){
             {role:"system",content:systemPrompt},
             {role:"user",content:currentRaw},
           ],
-          max_tokens:800,
-          temperature:0.7,
+          max_tokens:2000,
+          temperature:0.9,
         }),
       });
 
@@ -191,10 +273,12 @@ function AppProvider({children}){
 
       const clean=text.replace(/```json|```/g,"").trim();
       const parsed=JSON.parse(clean);
+      const variations=parsed.variations||[parsed];
+      const isExit=parsed.isExit||false;
 
-      setResult(parsed);
+      setResult({variations,currentIndex:0,isExit,...variations[0]});
       setHistory(h=>{
-        const entry={id:Date.now(),ctx:currentCtx,raw:currentRaw,refined:parsed.refined,toneLabel:parsed.toneLabel,ts:new Date().toISOString()};
+        const entry={id:Date.now(),ctx:currentCtx,raw:currentRaw,refined:variations[0].refined,toneLabel:variations[0].toneLabel,isExit,ts:new Date().toISOString()};
         const u=[entry,...h].slice(0,30);
         try{localStorage.setItem("clr_h",JSON.stringify(u));}catch(_){}
         return u;
@@ -215,7 +299,7 @@ function AppProvider({children}){
   },[]);
 
   return(
-    <AC.Provider value={{screen,go,personality,completeOnboarding,reset,ctx,setCtx,raw,setRaw,result,loading,genError,generate,history}}>
+    <AC.Provider value={{screen,go,personality,completeOnboarding,reset,ctx,setCtx,raw,setRaw,result,setResult,loading,genError,generate,history}}>
       {children}
     </AC.Provider>
   );
@@ -224,6 +308,7 @@ function AppProvider({children}){
 const D={
   bg:"#0D0C0B",bg2:"#141210",surface:"#1C1917",surf2:"#252119",
   accent:"#D4845A",accentD:"#B86B42",
+  exit:"#6B8F71",exitLight:"#1A2B1C",
   cream:"#F0E8DC",cream2:"#B8AC9E",cream3:"#6B6259",
   border:"rgba(240,232,220,0.08)",border2:"rgba(240,232,220,0.04)",
   serif:"'Fraunces',Georgia,serif",sans:"'DM Sans',sans-serif",
@@ -459,60 +544,115 @@ function Main(){
 }
 
 function Output(){
-  const {go,ctx,raw,result,loading,genError,generate,personality}=useApp();
+  const {go,ctx,raw,result,setResult,loading,genError,generate,personality}=useApp();
   const [copied,setCopied]=useState(false);
   const arch=personality.completed?ARCHETYPES[personality.archetypeKey]:null;
+  const isExit=result?.isExit||false;
+
   const copy=async()=>{
     if(!result?.refined)return;
     try{await navigator.clipboard.writeText(result.refined);setCopied(true);setTimeout(()=>setCopied(false),2200);}catch(_){}
   };
-  const regen=()=>generate(raw,ctx,personality);
+
+  // Cycle through pre-loaded variations — no API call needed
+  const nextVariation=()=>{
+    if(!result?.variations)return;
+    const next=(result.currentIndex+1)%result.variations.length;
+    const v=result.variations[next];
+    setResult({...result,currentIndex:next,...v});
+  };
+
+  const total=result?.variations?.length||1;
+  const current=(result?.currentIndex||0)+1;
+
+  // Dot indicators
+  const Dots=()=>(
+    <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:20}}>
+      {Array.from({length:total}).map((_,i)=>(
+        <div key={i} onClick={()=>{
+          const v=result.variations[i];
+          setResult({...result,currentIndex:i,...v});
+        }} style={{width:i===result.currentIndex?18:6,height:6,borderRadius:3,background:i===result.currentIndex?(isExit?D.exit:D.accent):D.border,transition:"all .25s",cursor:"pointer"}}/>
+      ))}
+    </div>
+  );
+
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",position:"relative"}}>
-      <Ambient color={arch?.color||D.accent}/>
+      <Ambient color={isExit?D.exit:arch?.color||D.accent}/>
       <div style={{position:"relative",zIndex:2,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"22px 24px 0",flexShrink:0}}>
         <button onClick={()=>go("main")} style={{background:"none",border:"none",fontFamily:D.sans,fontSize:13,color:D.cream2,cursor:"pointer",padding:0}}>← Edit</button>
-        <span style={{fontFamily:D.sans,fontSize:11,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.06em"}}>{ctx.label}</span>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {isExit&&<span style={{fontSize:11,color:D.exit,fontFamily:D.sans,fontWeight:500,background:`${D.exit}18`,border:`1px solid ${D.exit}40`,borderRadius:20,padding:"2px 10px"}}>Exit mode</span>}
+          <span style={{fontFamily:D.sans,fontSize:11,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.06em"}}>{ctx.label}</span>
+        </div>
       </div>
-      <div style={{flex:1,overflowY:"auto",padding:"24px 24px 36px",position:"relative",zIndex:1,scrollbarWidth:"none"}}>
+
+      <div style={{flex:1,overflowY:"auto",padding:"20px 24px 36px",position:"relative",zIndex:1,scrollbarWidth:"none"}}>
         {loading&&(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"70%",gap:16}}>
             <div style={{width:36,height:36,borderRadius:"50%",border:`2px solid ${D.border}`,borderTop:`2px solid ${D.accent}`,animation:"spin 1s linear infinite"}}/>
-            <p style={{fontFamily:D.sans,fontSize:13,color:D.cream3}}>Filtering your thought…</p>
+            <p style={{fontFamily:D.sans,fontSize:13,color:D.cream3}}>{isExit?"Finding your exit…":"Filtering your thought…"}</p>
           </div>
         )}
+
         {!loading&&genError&&(
           <div style={{padding:24,background:D.surface,borderRadius:16,border:`1px solid ${D.border}`,marginTop:20}}>
             <p style={{fontFamily:D.sans,fontSize:14,color:"#E08080",lineHeight:1.6,marginBottom:16}}>{genError}</p>
-            <GBtn onClick={regen}>Try again</GBtn>
+            <GBtn onClick={()=>generate(raw,ctx,personality)}>Try again</GBtn>
           </div>
         )}
+
         {!loading&&!genError&&result&&(
           <div>
-            <h2 style={{fontFamily:D.serif,fontSize:28,fontWeight:300,color:D.cream,lineHeight:1.25,letterSpacing:"-0.01em",marginBottom:6}}>
-              Here's what<br/>to <em style={{fontStyle:"italic",color:D.accent}}>say.</em>
+            {/* Header */}
+            <h2 style={{fontFamily:D.serif,fontSize:26,fontWeight:300,color:D.cream,lineHeight:1.25,letterSpacing:"-0.01em",marginBottom:6}}>
+              {isExit?"Here's your\nescape plan.":"Here's what\nto "}
+              {!isExit&&<em style={{fontStyle:"italic",color:D.accent}}>say.</em>}
             </h2>
-            <div style={{display:"inline-flex",alignItems:"center",gap:8,marginBottom:22,marginTop:6}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:"#6BBF8E"}}/>
+
+            {/* Tone badge */}
+            <div style={{display:"inline-flex",alignItems:"center",gap:8,marginBottom:16,marginTop:6}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:isExit?D.exit:"#6BBF8E"}}/>
               <span style={{fontFamily:D.sans,fontSize:12,color:D.cream3}}>{result.toneLabel}</span>
             </div>
-            <div style={{background:`linear-gradient(135deg,${D.surface} 0%,${D.surf2} 100%)`,border:`1px solid ${D.accent}40`,borderRadius:18,padding:"22px 20px",marginBottom:14,boxShadow:`0 4px 24px ${D.accent}15`}}>
-              <p style={{fontFamily:D.sans,fontSize:10,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>Filtered version</p>
+
+            {/* Dot navigation */}
+            <Dots/>
+
+            {/* Main card */}
+            <div style={{background:isExit?D.exitLight:`linear-gradient(135deg,${D.surface} 0%,${D.surf2} 100%)`,border:`1px solid ${isExit?D.exit+"40":D.accent+"40"}`,borderRadius:18,padding:"22px 20px",marginBottom:14,boxShadow:`0 4px 24px ${isExit?D.exit:D.accent}15`}}>
+              <p style={{fontFamily:D.sans,fontSize:10,color:isExit?D.exit:D.cream3,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>
+                {isExit?"Your exit line":"Filtered version"}
+              </p>
               <p style={{fontFamily:D.sans,fontSize:15,color:D.cream,lineHeight:1.8,whiteSpace:"pre-wrap"}}>{result.refined}</p>
             </div>
+
+            {/* Explanation */}
             {result.explanation&&(
               <p style={{fontFamily:D.sans,fontSize:13,color:D.cream3,lineHeight:1.6,marginBottom:18,fontStyle:"italic"}}>✦ {result.explanation}</p>
             )}
-            <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:14,padding:"14px 18px",marginBottom:22}}>
+
+            {/* Original */}
+            <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:14,padding:"14px 18px",marginBottom:20}}>
               <p style={{fontFamily:D.sans,fontSize:10,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>Your original</p>
               <p style={{fontFamily:D.sans,fontSize:13,color:D.cream3,lineHeight:1.65,fontStyle:"italic"}}>{raw}</p>
             </div>
+
+            {/* Actions */}
             <div style={{display:"flex",gap:10,marginBottom:16}}>
-              <PBtn onClick={copy} style={{flex:1,padding:"14px 16px"}}>{copied?"Copied ✓":"Copy"}</PBtn>
-              <GBtn onClick={regen} style={{flex:1,padding:"14px 16px"}}>Regenerate</GBtn>
+              <PBtn onClick={copy} style={{flex:1,padding:"14px 16px",background:isExit?D.exit:undefined}}>
+                {copied?"Copied ✓":"Copy"}
+              </PBtn>
+              <GBtn onClick={nextVariation} style={{flex:1,padding:"14px 16px"}}>
+                Next {isExit?"escape":"version"} →
+              </GBtn>
             </div>
+
             <div style={{textAlign:"center"}}>
-              <button onClick={()=>go("main")} style={{background:"none",border:"none",fontFamily:D.sans,fontSize:13,color:D.cream3,cursor:"pointer"}}>Start over</button>
+              <button onClick={()=>go("main")} style={{background:"none",border:"none",fontFamily:D.sans,fontSize:13,color:D.cream3,cursor:"pointer"}}>
+                Start over
+              </button>
             </div>
           </div>
         )}
