@@ -24,9 +24,11 @@ textarea::placeholder{color:#6B6259;font-style:italic;}
 const {useState,useContext,createContext,useEffect,useCallback}=React;
 
 // =============================================
-// YOUR API KEY — paste it between the quotes
+// STEP 1 — PASTE YOUR NVIDIA API KEY BELOW
+// Get it free at: build.nvidia.com
+// It starts with: nvapi-
 // =============================================
-const ANTHROPIC_KEY = "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";
+const NVIDIA_KEY = "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";
 // =============================================
 
 const CONTEXTS=[
@@ -134,11 +136,12 @@ function AppProvider({children}){
     setLoading(true);
     setScreen("output");
     try{
-      if(!ANTHROPIC_KEY||ANTHROPIC_KEY===""){
-        setGenError("No API key found. Open index.html, find the line that says ANTHROPIC_KEY = \"\" and paste your key between the quotes.");
+      if(!NVIDIA_KEY||NVIDIA_KEY===""){
+        setGenError("No API key found. Open index.html on GitHub, find the line NVIDIA_KEY = \"\" and paste your key between the quotes.");
         return;
       }
-      const system=[
+
+      const systemPrompt=[
         "You are Clearly — a communication filter for overthinkers.",
         "Take the user's raw unfiltered thought and rewrite it into a clear, appropriate message for their context.",
         "",
@@ -149,7 +152,7 @@ function AppProvider({children}){
         "",
         "RULES:",
         "- Read the actual intention behind what they wrote, not just the surface words.",
-        "- If the message is negative (anger, rejection, frustration) — soften it without losing the meaning. Example: 'I hate you and think you are a creep' in a dating context becomes something like 'I don't think we are a good fit. I wish you well.'",
+        "- If the message is negative (anger, rejection, frustration) — soften it without losing the meaning. Example: 'I hate you and think you are a creep' in a dating context becomes 'I don't think we are a good fit. I wish you well.'",
         "- If the message is positive — make it warmer and more natural.",
         "- If they are over-explaining — cut ruthlessly. Keep only the core point.",
         "- If they are too terse — add one warm human sentence.",
@@ -158,28 +161,36 @@ function AppProvider({children}){
         "- Match length to context: short for dating/social, longer for work/email.",
         "- NEVER return a generic response. The output must clearly reflect what the user actually typed.",
         "",
-        "Return ONLY valid JSON with no markdown or extra text:",
+        "You MUST respond with ONLY a valid JSON object. No explanation, no markdown, no code fences. Just raw JSON:",
         '{"refined":"the complete rewritten message","toneLabel":"Word · Word · Word","explanation":"one sentence: what you changed and why"}',
       ].join("\n");
-      const res=await fetch("https://api.anthropic.com/v1/messages",{
+
+      const res=await fetch("https://integrate.api.nvidia.com/v1/chat/completions",{
         method:"POST",
         headers:{
           "Content-Type":"application/json",
-          "x-api-key":ANTHROPIC_KEY,
-          "anthropic-version":"2023-06-01",
-          "anthropic-dangerous-direct-browser-access":"true",
+          "Authorization":`Bearer ${NVIDIA_KEY}`,
         },
         body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",
+          model:"meta/llama-3.1-70b-instruct",
+          messages:[
+            {role:"system",content:systemPrompt},
+            {role:"user",content:currentRaw},
+          ],
           max_tokens:800,
-          system,
-          messages:[{role:"user",content:currentRaw}],
+          temperature:0.7,
         }),
       });
+
       const data=await res.json();
-      if(data.error)throw new Error(data.error.message);
-      const text=(data.content||[]).map(b=>b.text||"").join("");
-      const parsed=JSON.parse(text.replace(/```json|```/g,"").trim());
+      if(data.error)throw new Error(data.error.message||"Nvidia API error");
+
+      const text=data.choices?.[0]?.message?.content||"";
+      if(!text)throw new Error("Empty response from Nvidia");
+
+      const clean=text.replace(/```json|```/g,"").trim();
+      const parsed=JSON.parse(clean);
+
       setResult(parsed);
       setHistory(h=>{
         const entry={id:Date.now(),ctx:currentCtx,raw:currentRaw,refined:parsed.refined,toneLabel:parsed.toneLabel,ts:new Date().toISOString()};
@@ -187,8 +198,9 @@ function AppProvider({children}){
         try{localStorage.setItem("clr_h",JSON.stringify(u));}catch(_){}
         return u;
       });
+
     }catch(e){
-      setGenError("Something went wrong: "+(e.message||"check your API key and try again."));
+      setGenError("Something went wrong: "+(e.message||"check your Nvidia key and try again."));
       console.error(e);
     }finally{
       setLoading(false);
