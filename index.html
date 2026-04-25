@@ -13,23 +13,46 @@
 html,body{height:100%;width:100%;background:#1A1612;}
 #root{height:100%;width:100%;}
 textarea::placeholder{color:#6B6259;font-style:italic;}
+input::placeholder{color:#6B6259;}
 ::-webkit-scrollbar{display:none;}
 @keyframes pulse{0%,100%{opacity:.6;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useContext,createContext,useEffect,useCallback}=React;
+const {useState,useContext,createContext,useEffect,useCallback,useRef}=React;
 
 // =============================================
 // PASTE YOUR GROQ API KEY BETWEEN THE QUOTES
-// Get it free at: console.groq.com
-// No credit card needed. Starts with: gsk_
+// Get free at: console.groq.com
+// Starts with: gsk_
 // =============================================
-const GROQ_KEY = "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";
+const GROQ_KEY = "sk_ab33bf9f911e428101cd4ad9076eeb5a71763cc226db443b";
 // =============================================
+
+const GOOGLE_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSfGUOA7cpfxdATBHZA7CE2Cfxdf5OvD6u9VxjWIHR0hdRHXew/formResponse";
+const ENTRY_NAME  = "entry.1321807565";
+const ENTRY_EMAIL = "entry.13266213";
+
+const APP_NAME      = "Clearly";
+const CONTACT_EMAIL = "ansh4all@gmail.com";
+const FREE_LIMIT    = 5;
+
+function getUsage(){try{const r=localStorage.getItem("clr_usage");if(!r)return{count:0,date:new Date().toDateString()};return JSON.parse(r);}catch(_){return{count:0,date:new Date().toDateString()};}}
+function incrementUsage(){const today=new Date().toDateString();const u=getUsage();const count=u.date===today?u.count+1:1;try{localStorage.setItem("clr_usage",JSON.stringify({count,date:today}));}catch(_){}return count;}
+function todayUsage(){const u=getUsage();if(u.date!==new Date().toDateString())return 0;return u.count;}
+function getAgeGateAccepted(){try{return localStorage.getItem("clr_age")==="1";}catch(_){return false;}}
+function getToSAccepted(){try{return localStorage.getItem("clr_tos")==="1";}catch(_){return false;}}
+
+async function submitToGoogle(name,email){
+  const formData=new FormData();
+  formData.append(ENTRY_NAME,name);
+  formData.append(ENTRY_EMAIL,email);
+  await fetch(GOOGLE_FORM_URL,{method:"POST",mode:"no-cors",body:formData});
+}
 
 const CONTEXTS=[
   {id:"work",  label:"Work",  sub:"meetings, slack, feedback", tone:"Professional, direct, solution-focused. Remove blame and emotion."},
@@ -43,22 +66,22 @@ const ARCHETYPES={
     tagline:"You lead with empathy, context, and about 40% too many words.",
     traits:["Empathetic","Thorough","Verbose"],
     tip:"Write it all out, then delete the first two sentences.",
-    exitStyle:"Give a detailed story-based excuse with names and context. Make it believable because you over-explain naturally. Example: 'Oh my god, I just got a text — my friend Maya is locked out of her flat and I'm literally the only one with a spare key. I'm so sorry, I have to run!'"},
+    exitStyle:"Give a detailed story-based excuse with names and context. Make it believable because you over-explain naturally. Example: Oh my god, I just got a text — my friend Maya is locked out of her flat and I am literally the only one with a spare key. I am so sorry, I have to run!"},
   terse:{key:"terse",label:"The Clammer",emoji:"🔒",color:"#7C9EBE",
     tagline:"Under pressure you go quiet. What comes out is curt and often misread.",
     traits:["Efficient","Private","Guarded"],
     tip:"Add one warm sentence before your main point.",
-    exitStyle:"Give the shortest possible exit. One sentence, no explanation. Example: 'I have to go.' or 'Sorry, something came up.' Nothing more."},
+    exitStyle:"Give the shortest possible exit. One sentence, no explanation. Example: I have to go. Or: Sorry, something came up. Nothing more."},
   qualifier:{key:"qualifier",label:"The Softener",emoji:"🌿",color:"#8CBE8C",
     tagline:"You wrap every thought in cushions. The point is in there — somewhere.",
     traits:["Considerate","Diplomatic","Hedging"],
     tip:"Lead with the ask. Soften after.",
-    exitStyle:"Give a warm apologetic excuse loaded with softeners. Example: 'I am so sorry, I really hate to do this, but I just remembered I promised to help someone and I would feel terrible letting them down — would you mind if I slipped away?'"},
+    exitStyle:"Give a warm apologetic excuse loaded with softeners. Example: I am so sorry, I really hate to do this, but I just remembered I promised to help someone and I would feel terrible letting them down — would you mind if I slipped away?"},
   blunt:{key:"blunt",label:"The Steamroller",emoji:"⚡",color:"#BE9B7C",
     tagline:"You say exactly what you mean — sometimes before checking the moment.",
     traits:["Direct","Decisive","Unfiltered"],
     tip:"Add one line of context before you land the point.",
-    exitStyle:"Give a direct unapologetic exit. No story needed. Example: 'I need to head off.' or 'I am going to go now.' Delivered with confidence."},
+    exitStyle:"Give a direct unapologetic exit. No story needed. Example: I need to head off. Or: I am going to go now. Delivered with confidence."},
 };
 
 const EXIT_CATEGORIES=`
@@ -72,7 +95,7 @@ CATEGORY 3 WORKPLACE LANDMINES: boss is wrong but wrong moment, colleague taking
 
 CATEGORY 4 FAMILY AND RELATIONSHIP TRAPS: relative asking when getting married or having kids, unsolicited parenting or life advice, ex trying to restart closed conversation, family member starting political or religious argument at dinner, asked opinion on terrible partner.
 
-CATEGORY 5 DATING AND SOCIAL AWKWARDNESS: date going badly and need to leave, someone flirting and not interested, friend of friend won't stop talking, someone clearly lying but cannot call it out, being asked to take sides in someone else's argument.
+CATEGORY 5 DATING AND SOCIAL AWKWARDNESS: date going badly and need to leave, someone flirting and not interested, friend of friend wont stop talking, someone clearly lying but cannot call it out, being asked to take sides in someone else argument.
 
 CATEGORY 6 DIGITAL TEXT TRAPS: someone sends long rant expecting full response, group chat blowing up and being pulled in, passive aggressive message received, old contact resurfaces wanting something.
 `;
@@ -135,19 +158,26 @@ const AC=createContext(null);
 const useApp=()=>useContext(AC);
 
 function AppProvider({children}){
-  const [screen,     setScreen]     = useState("splash");
-  const [personality,setPersonality]= useState(defaultP);
-  const [ctx,        setCtx]        = useState(CONTEXTS[0]);
-  const [raw,        setRaw]        = useState("");
-  const [result,     setResult]     = useState(null);
-  const [loading,    setLoading]    = useState(false);
-  const [genError,   setGenError]   = useState(null);
-  const [history,    setHistory]    = useState([]);
+  const [screen,      setScreen]      = useState("gate");
+  const [personality, setPersonality] = useState(defaultP);
+  const [ctx,         setCtx]         = useState(CONTEXTS[0]);
+  const [raw,         setRaw]         = useState("");
+  const [result,      setResult]      = useState(null);
+  const [loading,     setLoading]     = useState(false);
+  const [genError,    setGenError]    = useState(null);
+  const [history,     setHistory]     = useState([]);
+  const [usageCount,  setUsageCount]  = useState(()=>todayUsage());
+  const [showPaywall, setShowPaywall] = useState(false);
 
   useEffect(()=>{
     try{
-      const p=localStorage.getItem("clr_p");
-      if(p){const j=JSON.parse(p);if(j?.completed){setPersonality(j);setScreen("main");}}
+      const ageOk=getAgeGateAccepted();
+      const tosOk=getToSAccepted();
+      if(ageOk&&tosOk){
+        const p=localStorage.getItem("clr_p");
+        if(p){const j=JSON.parse(p);if(j?.completed){setPersonality(j);setScreen("main");return;}}
+        setScreen("splash");
+      }
       const h=localStorage.getItem("clr_h");
       if(h)setHistory(JSON.parse(h)||[]);
     }catch(_){}
@@ -164,18 +194,15 @@ function AppProvider({children}){
 
   const generate=useCallback(async(currentRaw,currentCtx,currentPersonality)=>{
     if(!currentRaw.trim())return;
-    setResult(null);
-    setGenError(null);
-    setLoading(true);
-    setScreen("output");
+    const used=todayUsage();
+    if(used>=FREE_LIMIT){setShowPaywall(true);return;}
+    setResult(null);setGenError(null);setLoading(true);setScreen("output");
     try{
       if(!GROQ_KEY||GROQ_KEY===""){
-        setGenError("No API key found. Open index.html on GitHub, find GROQ_KEY = \"\" and paste your Groq key between the quotes.");
+        setGenError("No API key found. Add your GROQ_KEY to index.html on GitHub.");
         return;
       }
-
       const arch=ARCHETYPES[currentPersonality.archetypeKey]||ARCHETYPES.qualifier;
-
       const systemPrompt=[
         "You are Clearly — a witty warm communication filter for overthinkers.",
         "You help people say what they mean clearly, confidently, and sometimes with humour.",
@@ -187,76 +214,54 @@ function AppProvider({children}){
         `TONE: ${currentCtx.tone}`,
         "",
         "LANGUAGE DETECTION RULE — VERY IMPORTANT:",
-        "Carefully detect the language of the user's input.",
+        "Detect the language of the user input carefully.",
         "If the user writes in English only — respond in English only.",
-        "If the user writes in Hinglish (Hindi + English mixed, or Hindi written in Roman script like 'yaar', 'kya', 'matlab', 'bhai', 'suno', 'lagta hai', 'nahi', 'haan', 'theek hai') — respond in Hinglish. Match their vibe and energy. Keep it natural, the way young urban Indians actually text.",
-        "If the user writes in Hindi (Devanagari script) — respond in Hindi.",
+        "If the user writes in Hinglish (Hindi and English mixed, or Hindi in Roman script like yaar, kya, matlab, bhai, suno, lagta hai, nahi, haan, theek hai, arre, woh, karna) — respond in Hinglish. Match their vibe. Keep it natural like young urban Indians actually text.",
+        "If the user writes in Hindi Devanagari — respond in Hindi.",
         "Never switch languages unless the user switches first.",
-        "For exit excuses in Hinglish, make them sound natural like 'Yaar sorry, mujhe abhi jaana padega' not a translated version of English.",
+        "For Hinglish exits, make them sound natural like: Yaar sorry, mujhe abhi jaana padega.",
         "",
         EXIT_CATEGORIES,
         "",
-        "IF THIS IS AN EXIT SCENARIO set isExit to true and give 5 exit excuses matched to the user personality archetype.",
+        "IF EXIT SCENARIO: set isExit true. Give 5 exit excuses matched to user personality.",
         `Exit style for this user: ${arch.exitStyle}`,
-        "Each excuse must sound like something this specific person would say. Vary them meaningfully.",
-        "Keep each excuse SHORT. Maximum 2 sentences each.",
+        "Each excuse must sound like something this specific person would say. Vary meaningfully. MAX 2 sentences each.",
         "",
-        "IF THIS IS A NORMAL REWRITE set isExit to false and give 5 rewrites.",
-        "Rules: warm human occasionally witty. Never robotic or like a LinkedIn post.",
-        "Read the intention not just the words. Soften negatives. Sharpen positives.",
-        "Fix their specific weakness: over-explaining means cut ruthlessly, terse means add warmth, hedging means be direct, blunt means soften.",
-        "Each of the 5 variations must feel meaningfully different in tone length and angle.",
-        "Keep each variation SHORT and punchy. No essays.",
+        "IF NORMAL REWRITE: set isExit false. Give 5 rewrites.",
+        "Be warm, human, occasionally witty. Never robotic or LinkedIn-ish.",
+        "Read intention not just words. Soften negatives. Sharpen positives.",
+        "Fix their weakness: over-explaining means cut ruthlessly, terse means add warmth, hedging means be direct, blunt means soften.",
+        "Each of 5 variations must feel meaningfully different in tone, length, angle. Keep SHORT and punchy.",
         "",
-        "RESPOND WITH ONLY RAW JSON. No markdown. No explanation. No code fences. Just this exact structure:",
+        "RESPOND WITH ONLY RAW JSON. No markdown. No explanation. No code fences:",
         '{"isExit":false,"variations":[{"refined":"text","toneLabel":"A · B · C","explanation":"one line"},{"refined":"text","toneLabel":"A · B · C","explanation":"one line"},{"refined":"text","toneLabel":"A · B · C","explanation":"one line"},{"refined":"text","toneLabel":"A · B · C","explanation":"one line"},{"refined":"text","toneLabel":"A · B · C","explanation":"one line"}]}',
       ].join("\n");
 
       const res=await fetch("https://api.groq.com/openai/v1/chat/completions",{
         method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "Authorization":`Bearer ${GROQ_KEY}`,
-        },
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${GROQ_KEY}`},
         body:JSON.stringify({
           model:"llama-3.3-70b-versatile",
-          messages:[
-            {role:"system",content:systemPrompt},
-            {role:"user",content:currentRaw},
-          ],
-          max_tokens:3000,
-          temperature:0.9,
+          messages:[{role:"system",content:systemPrompt},{role:"user",content:currentRaw}],
+          max_tokens:3000,temperature:0.9,
         }),
       });
-
       const data=await res.json();
       if(data.error)throw new Error(data.error.message||"Groq API error");
-
       const text=data.choices?.[0]?.message?.content||"";
       if(!text)throw new Error("Empty response from Groq");
-
       let clean=text.replace(/```json|```/g,"").trim();
-
-      // Safe JSON parse with fallback repair
       let parsed;
-      try{
-        parsed=JSON.parse(clean);
-      }catch(e){
-        // Try to salvage complete variations from truncated JSON
+      try{parsed=JSON.parse(clean);}
+      catch(e){
         const matches=[...clean.matchAll(/\{"refined"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"toneLabel"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"explanation"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}/g)];
-        if(matches.length>0){
-          parsed={
-            isExit:clean.includes('"isExit":true')||clean.includes('"isExit": true'),
-            variations:matches.map(m=>({refined:m[1],toneLabel:m[2],explanation:m[3]}))
-          };
-        }else{
-          throw new Error("Response was cut off. Please try again.");
-        }
+        if(matches.length>0){parsed={isExit:clean.includes('"isExit":true'),variations:matches.map(m=>({refined:m[1],toneLabel:m[2],explanation:m[3]}))};
+        }else{throw new Error("Response was cut off. Please try again.");}
       }
-
       const variations=parsed.variations||[parsed];
       const isExit=parsed.isExit||false;
-
+      const newCount=incrementUsage();
+      setUsageCount(newCount);
       setResult({variations,currentIndex:0,isExit,...variations[0]});
       setHistory(h=>{
         const entry={id:Date.now(),ctx:currentCtx,raw:currentRaw,refined:variations[0].refined,toneLabel:variations[0].toneLabel,isExit,ts:new Date().toISOString()};
@@ -264,13 +269,9 @@ function AppProvider({children}){
         try{localStorage.setItem("clr_h",JSON.stringify(u));}catch(_){}
         return u;
       });
-
     }catch(e){
       setGenError("Something went wrong: "+(e.message||"check your Groq key and try again."));
-      console.error(e);
-    }finally{
-      setLoading(false);
-    }
+    }finally{setLoading(false);}
   },[]);
 
   const reset=useCallback(()=>{
@@ -280,7 +281,7 @@ function AppProvider({children}){
   },[]);
 
   return(
-    <AC.Provider value={{screen,go,personality,completeOnboarding,reset,ctx,setCtx,raw,setRaw,result,setResult,loading,genError,generate,history}}>
+    <AC.Provider value={{screen,go,personality,completeOnboarding,reset,ctx,setCtx,raw,setRaw,result,setResult,loading,genError,generate,history,usageCount,showPaywall,setShowPaywall}}>
       {children}
     </AC.Provider>
   );
@@ -297,35 +298,256 @@ const D={
 
 function PBtn({children,onClick,disabled,style={}}){
   const [h,setH]=useState(false);
-  return(
-    <button onClick={onClick} disabled={disabled}
-      onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
-      style={{background:disabled?D.surf2:h?D.accentD:D.accent,color:disabled?D.cream3:"#fff",border:"none",borderRadius:14,padding:"16px 28px",fontFamily:D.sans,fontSize:15,fontWeight:500,cursor:disabled?"not-allowed":"pointer",transition:"all .2s",...style}}>
-      {children}
-    </button>
-  );
+  return <button onClick={onClick} disabled={disabled} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    style={{background:disabled?D.surf2:h?D.accentD:D.accent,color:disabled?D.cream3:"#fff",border:"none",borderRadius:14,padding:"16px 28px",fontFamily:D.sans,fontSize:15,fontWeight:500,cursor:disabled?"not-allowed":"pointer",transition:"all .2s",...style}}>
+    {children}
+  </button>;
 }
 
 function GBtn({children,onClick,style={}}){
   const [h,setH]=useState(false);
-  return(
-    <button onClick={onClick}
-      onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
-      style={{background:h?D.surf2:"transparent",color:D.cream2,border:`1px solid ${D.border}`,borderRadius:10,padding:"11px 20px",fontFamily:D.sans,fontSize:13,cursor:"pointer",transition:"all .2s",...style}}>
-      {children}
-    </button>
-  );
+  return <button onClick={onClick} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
+    style={{background:h?D.surf2:"transparent",color:D.cream2,border:`1px solid ${D.border}`,borderRadius:10,padding:"11px 20px",fontFamily:D.sans,fontSize:13,cursor:"pointer",transition:"all .2s",...style}}>
+    {children}
+  </button>;
 }
 
 function Ambient({color=D.accent}){
+  return <div style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none",zIndex:0}}>
+    <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:`radial-gradient(circle,${color}1A 0%,transparent 70%)`,top:"50%",left:"50%",transform:"translate(-50%,-50%)",animation:"pulse 6s ease-in-out infinite"}}/>
+    <div style={{position:"absolute",width:260,height:260,borderRadius:"50%",background:`radial-gradient(circle,${color}0D 0%,transparent 70%)`,top:"12%",right:"8%",animation:"pulse 9s ease-in-out infinite reverse"}}/>
+  </div>;
+}
+
+function NameEmailForm({onSubmit,submitting,inputBg=D.surface}){
+  const [name,setName]=useState("");
+  const [email,setEmail]=useState("");
+  const valid=name.trim()&&email.includes("@");
   return(
-    <div style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none",zIndex:0}}>
-      <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:`radial-gradient(circle,${color}1A 0%,transparent 70%)`,top:"50%",left:"50%",transform:"translate(-50%,-50%)",animation:"pulse 6s ease-in-out infinite"}}/>
-      <div style={{position:"absolute",width:260,height:260,borderRadius:"50%",background:`radial-gradient(circle,${color}0D 0%,transparent 70%)`,top:"12%",right:"8%",animation:"pulse 9s ease-in-out infinite reverse"}}/>
+    <div style={{width:"100%"}}>
+      <input type="text" value={name} onChange={e=>setName(e.target.value)}
+        placeholder="Your name"
+        style={{width:"100%",background:inputBg,border:`1px solid ${D.border}`,borderRadius:10,padding:"12px 16px",fontFamily:D.sans,fontSize:14,color:D.cream,outline:"none",marginBottom:8}}
+      />
+      <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
+        placeholder="your@email.com"
+        onKeyDown={e=>e.key==="Enter"&&valid&&onSubmit(name,email)}
+        style={{width:"100%",background:inputBg,border:`1px solid ${D.border}`,borderRadius:10,padding:"12px 16px",fontFamily:D.sans,fontSize:14,color:D.cream,outline:"none",marginBottom:10}}
+      />
+      <PBtn onClick={()=>valid&&onSubmit(name,email)} disabled={!valid||submitting} style={{width:"100%"}}>
+        {submitting?"Sending…":"Count me in →"}
+      </PBtn>
     </div>
   );
 }
 
+// ════════════════════════════════════════════════════════
+// AGE GATE
+// ════════════════════════════════════════════════════════
+function AgeGate(){
+  const {go}=useApp();
+  const [v,setV]=useState(false);
+  useEffect(()=>{setTimeout(()=>setV(true),100);},[]);
+  const accept=()=>{try{localStorage.setItem("clr_age","1");}catch(_){}go("tos");};
+  const decline=()=>{alert("Sorry, Clearly is only available to users aged 13 and above.");};
+  return(
+    <div style={{position:"relative",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",padding:"40px 28px",textAlign:"center"}}>
+      <Ambient/>
+      <div style={{position:"relative",zIndex:1,opacity:v?1:0,transform:v?"translateY(0)":"translateY(20px)",transition:"all .6s ease",maxWidth:320,width:"100%"}}>
+        <div style={{width:56,height:56,borderRadius:16,background:`linear-gradient(135deg,${D.accent},${D.accentD})`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 24px",boxShadow:`0 8px 32px ${D.accent}40`}}>
+          <span style={{fontSize:26,color:"#fff"}}>✦</span>
+        </div>
+        <h1 style={{fontFamily:D.serif,fontSize:36,fontWeight:300,color:D.cream,lineHeight:1.15,letterSpacing:"-0.01em",marginBottom:16}}>
+          Before you<br/><em style={{fontStyle:"italic",color:D.accent}}>filter…</em>
+        </h1>
+        <p style={{fontFamily:D.sans,fontSize:15,color:D.cream2,lineHeight:1.65,marginBottom:32}}>
+          Clearly is for people aged <strong style={{color:D.cream}}>13 and above.</strong><br/>Are you 13 or older?
+        </p>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <PBtn onClick={accept} style={{width:"100%",padding:"16px"}}>Yes, I am 13 or older →</PBtn>
+          <GBtn onClick={decline} style={{width:"100%",padding:"14px"}}>No, I am under 13</GBtn>
+        </div>
+        <p style={{fontFamily:D.sans,fontSize:11,color:D.cream3,marginTop:20,lineHeight:1.6}}>
+          By continuing you confirm this app is not therapy, not professional advice, and should be used at your own risk.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// TERMS OF SERVICE
+// ════════════════════════════════════════════════════════
+function ToSScreen(){
+  const {go}=useApp();
+  const [scrolled,setScrolled]=useState(false);
+  const [v,setV]=useState(false);
+  const ref=useRef(null);
+  useEffect(()=>{setTimeout(()=>setV(true),100);},[]);
+  const handleScroll=()=>{
+    if(!ref.current)return;
+    const {scrollTop,scrollHeight,clientHeight}=ref.current;
+    if(scrollTop+clientHeight>=scrollHeight-40)setScrolled(true);
+  };
+  const accept=()=>{try{localStorage.setItem("clr_tos","1");}catch(_){}go("splash");};
+  const sections=[
+    {title:"What is Clearly?",body:`Clearly is a free AI-powered communication helper that rewrites and filters your thoughts to help you communicate more clearly. It is a beta product operated by an individual developer.\n\nContact: ${CONTACT_EMAIL}`},
+    {title:"⚠️ Not Therapy. Not Advice.",body:"Clearly is NOT therapy, counselling, medical advice, legal advice, or professional advice of any kind. It is a light creative tool for everyday communication situations. Nothing in this app should be treated as professional guidance.\n\nIf you are experiencing a mental health crisis, relationship crisis, or legal issue, please speak to a qualified professional.\n\nUse Clearly entirely at your own risk."},
+    {title:"Age Requirement",body:"You must be 13 years of age or older to use Clearly. By using this app you confirm you meet this requirement. If you are under 13, please stop using the app immediately."},
+    {title:"Limitation of Liability",body:"To the fullest extent permitted by law, Clearly and its developer shall not be liable for any direct, indirect, incidental, special, or consequential damages resulting from your use of, or inability to use, this app.\n\nThis includes but is not limited to: relationship damage, professional consequences, emotional distress, or any other outcome arising from following a suggestion made by this app.\n\nYou use Clearly entirely at your own risk."},
+    {title:"Privacy Policy",body:`We take your privacy seriously. Here is exactly what happens with your data:\n\n• Your messages are sent to Groq (groq.com) for AI processing. Groq's privacy policy applies.\n\n• We do not store your messages on any server. Once processed, they are gone.\n\n• Your personality profile is stored only in your browser's local storage on your own device. We cannot access it.\n\n• If you submit your name and email for beta updates, it is stored in a Google Sheet accessible only to the developer at ${CONTACT_EMAIL}. We will never sell, share, or spam your information.\n\n• We do not use tracking cookies. We do not run ads. We do not sell data.\n\nFor any questions: ${CONTACT_EMAIL}`},
+    {title:"Beta Product",body:"Clearly is currently in free beta. The product is still being developed, may have bugs, and features may change.\n\nDuring beta, Clearly is completely free within daily limits. Any future pricing will be communicated clearly before any charges apply."},
+    {title:"Intellectual Property",body:"All content, design, and code in Clearly belongs to its developer. You may not copy, reproduce, or redistribute any part of Clearly without written permission."},
+    {title:"Changes to These Terms",body:`We may update these terms at any time. Continued use of the app after changes means you accept the new terms.\n\nLast updated: ${new Date().toLocaleDateString("en-IN",{year:"numeric",month:"long",day:"numeric"})}`},
+  ];
+  return(
+    <div style={{position:"relative",display:"flex",flexDirection:"column",height:"100%"}}>
+      <Ambient/>
+      <div style={{position:"relative",zIndex:1,padding:"28px 24px 16px",flexShrink:0}}>
+        <div style={{opacity:v?1:0,transition:"opacity .5s ease"}}>
+          <p style={{fontFamily:D.sans,fontSize:11,color:D.accent,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:8}}>Before you start</p>
+          <h1 style={{fontFamily:D.serif,fontSize:28,fontWeight:300,color:D.cream,lineHeight:1.2,marginBottom:4}}>
+            Terms & <em style={{fontStyle:"italic",color:D.accent}}>Privacy</em>
+          </h1>
+          <p style={{fontFamily:D.sans,fontSize:12,color:D.cream3,lineHeight:1.5}}>Please read and scroll to the bottom to accept.</p>
+        </div>
+      </div>
+      <div ref={ref} onScroll={handleScroll} style={{flex:1,overflowY:"auto",padding:"0 24px",scrollbarWidth:"none",position:"relative",zIndex:1}}>
+        {sections.map((s,i)=>(
+          <div key={i} style={{marginBottom:16,background:D.surface,border:`1px solid ${D.border}`,borderRadius:14,padding:"16px 18px",animation:"fadeIn .4s ease both",animationDelay:`${i*0.05}s`}}>
+            <p style={{fontFamily:D.sans,fontSize:11,fontWeight:500,color:D.accent,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.06em"}}>{s.title}</p>
+            <p style={{fontFamily:D.sans,fontSize:13,color:D.cream2,lineHeight:1.65,whiteSpace:"pre-wrap"}}>{s.body}</p>
+          </div>
+        ))}
+        <div style={{height:20}}/>
+      </div>
+      <div style={{padding:"16px 24px",borderTop:`1px solid ${D.border}`,background:D.bg,flexShrink:0,position:"relative",zIndex:1}}>
+        {!scrolled&&<p style={{fontFamily:D.sans,fontSize:11,color:D.cream3,textAlign:"center",marginBottom:10}}>↓ Scroll to read everything before accepting</p>}
+        <PBtn onClick={accept} disabled={!scrolled} style={{width:"100%"}}>
+          {scrolled?"I agree — let's go →":"Scroll to accept"}
+        </PBtn>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// BETA BANNER
+// ════════════════════════════════════════════════════════
+function BetaBanner(){
+  const [dismissed,setDismissed]=useState(()=>{try{return localStorage.getItem("clr_beta")==="1";}catch(_){return false;}});
+  const [showForm,setShowForm]=useState(false);
+  const [submitted,setSubmitted]=useState(false);
+  const [submitting,setSubmitting]=useState(false);
+  if(dismissed)return null;
+  const dismiss=()=>{try{localStorage.setItem("clr_beta","1");}catch(_){}setDismissed(true);};
+  const handleSubmit=async(name,email)=>{
+    setSubmitting(true);
+    try{await submitToGoogle(name,email);}catch(_){}
+    setSubmitted(true);
+    setSubmitting(false);
+    setTimeout(()=>dismiss(),2500);
+  };
+  return(
+    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:50,background:D.bg2,borderTop:`1px solid ${D.border}`,padding:"14px 20px",animation:"fadeIn .4s ease"}}>
+      {!showForm&&!submitted&&(
+        <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+          <span style={{fontSize:16,flexShrink:0}}>🎉</span>
+          <div style={{flex:1}}>
+            <p style={{fontFamily:D.sans,fontSize:12,fontWeight:500,color:D.cream,marginBottom:3}}>Clearly is free during beta!</p>
+            <p style={{fontFamily:D.sans,fontSize:11,color:D.cream3,lineHeight:1.5}}>Want early access to premium features? Drop your details.</p>
+          </div>
+          <div style={{display:"flex",gap:8,flexShrink:0}}>
+            <button onClick={()=>setShowForm(true)} style={{background:D.accent,color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontFamily:D.sans,fontSize:11,fontWeight:500,cursor:"pointer"}}>
+              Notify me
+            </button>
+            <button onClick={dismiss} style={{background:"none",border:"none",color:D.cream3,cursor:"pointer",fontSize:18,lineHeight:1,padding:"0 4px"}}>×</button>
+          </div>
+        </div>
+      )}
+      {showForm&&!submitted&&(
+        <div style={{animation:"fadeIn .3s ease"}}>
+          <p style={{fontFamily:D.sans,fontSize:12,fontWeight:500,color:D.cream,marginBottom:12}}>Drop your details — we will reach out first 🙌</p>
+          <NameEmailForm onSubmit={handleSubmit} submitting={submitting} inputBg={D.surface}/>
+          <button onClick={dismiss} style={{background:"none",border:"none",color:D.cream3,cursor:"pointer",fontFamily:D.sans,fontSize:11,marginTop:10,padding:0}}>No thanks</button>
+        </div>
+      )}
+      {submitted&&(
+        <div style={{textAlign:"center",animation:"fadeIn .3s ease"}}>
+          <p style={{fontFamily:D.sans,fontSize:13,color:D.cream,marginBottom:4}}>✓ You are on the list!</p>
+          <p style={{fontFamily:D.sans,fontSize:11,color:D.cream3}}>We will be in touch when premium launches.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// PAYWALL
+// ════════════════════════════════════════════════════════
+function Paywall(){
+  const {setShowPaywall}=useApp();
+  const [showForm,setShowForm]=useState(false);
+  const [submitted,setSubmitted]=useState(false);
+  const [submitting,setSubmitting]=useState(false);
+  const handleSubmit=async(name,email)=>{
+    setSubmitting(true);
+    try{await submitToGoogle(name,email);}catch(_){}
+    setSubmitted(true);
+    setSubmitting(false);
+  };
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:100,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:24,padding:32,maxWidth:340,width:"100%",textAlign:"center",animation:"fadeIn .3s ease"}}>
+        <div style={{fontSize:36,marginBottom:16}}>✦</div>
+        <h2 style={{fontFamily:D.serif,fontSize:26,fontWeight:300,color:D.cream,marginBottom:10,lineHeight:1.3}}>
+          You've used your<br/><em style={{fontStyle:"italic",color:D.accent}}>5 free filters.</em>
+        </h2>
+        {!submitted?(
+          <>
+            <p style={{fontFamily:D.sans,fontSize:14,color:D.cream2,lineHeight:1.65,marginBottom:20}}>
+              Come back tomorrow for 5 more — or drop your details to get early access when premium launches.
+            </p>
+            {!showForm?(
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <PBtn onClick={()=>setShowForm(true)} style={{width:"100%"}}>
+                  Notify me when premium launches →
+                </PBtn>
+                <button onClick={()=>setShowPaywall(false)} style={{background:"none",border:"none",fontFamily:D.sans,fontSize:13,color:D.cream3,cursor:"pointer"}}>
+                  See you tomorrow
+                </button>
+              </div>
+            ):(
+              <div style={{animation:"fadeIn .3s ease",textAlign:"left"}}>
+                <NameEmailForm onSubmit={handleSubmit} submitting={submitting} inputBg={D.bg}/>
+                <button onClick={()=>setShowPaywall(false)} style={{background:"none",border:"none",fontFamily:D.sans,fontSize:12,color:D.cream3,cursor:"pointer",marginTop:10,display:"block",width:"100%",textAlign:"center"}}>
+                  No thanks
+                </button>
+              </div>
+            )}
+          </>
+        ):(
+          <div style={{animation:"fadeIn .3s ease"}}>
+            <p style={{fontFamily:D.sans,fontSize:15,color:D.cream,marginBottom:6}}>✓ You are on the list!</p>
+            <p style={{fontFamily:D.sans,fontSize:13,color:D.cream3,marginBottom:20,lineHeight:1.6}}>We will reach out when premium is ready.</p>
+            <button onClick={()=>setShowPaywall(false)} style={{background:"none",border:"none",fontFamily:D.sans,fontSize:13,color:D.cream3,cursor:"pointer"}}>
+              Close
+            </button>
+          </div>
+        )}
+        <div style={{marginTop:24,padding:"12px 14px",background:D.bg,borderRadius:10,border:`1px solid ${D.border}`}}>
+          <p style={{fontFamily:D.sans,fontSize:11,color:D.cream3,lineHeight:1.6}}>
+            ⚠️ Clearly is not therapy or professional advice. Use at your own risk. Contact: {CONTACT_EMAIL}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// SPLASH
+// ════════════════════════════════════════════════════════
 function Splash(){
   const {go}=useApp();
   const [v,setV]=useState(false);
@@ -337,21 +559,30 @@ function Splash(){
         <div style={{width:60,height:60,borderRadius:18,background:`linear-gradient(135deg,${D.accent},${D.accentD})`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 24px",boxShadow:`0 8px 32px ${D.accent}40`}}>
           <span style={{fontSize:28,color:"#fff"}}>✦</span>
         </div>
-        <div style={{fontFamily:D.serif,fontSize:52,fontWeight:300,color:D.cream,lineHeight:1,letterSpacing:"-0.02em",marginBottom:20}}>
+        <div style={{fontFamily:D.serif,fontSize:52,fontWeight:300,color:D.cream,lineHeight:1,letterSpacing:"-0.02em",marginBottom:14}}>
           Clear<em style={{fontStyle:"italic",color:D.accent}}>ly</em>
         </div>
-        <p style={{fontFamily:D.sans,fontSize:17,color:D.cream2,lineHeight:1.65,maxWidth:280,margin:"0 auto 48px",fontWeight:300}}>
+        <div style={{display:"inline-block",background:`${D.accent}20`,border:`1px solid ${D.accent}40`,borderRadius:20,padding:"4px 14px",marginBottom:16}}>
+          <span style={{fontFamily:D.sans,fontSize:11,color:D.accent,fontWeight:500,letterSpacing:"0.06em"}}>FREE BETA</span>
+        </div>
+        <p style={{fontFamily:D.sans,fontSize:17,color:D.cream2,lineHeight:1.65,maxWidth:280,margin:"0 auto 10px",fontWeight:300}}>
           A filter for overthinkers.<br/>Say what you mean — clearly.
         </p>
+        <p style={{fontFamily:D.sans,fontSize:11,color:D.cream3,maxWidth:260,margin:"0 auto 36px",lineHeight:1.6}}>
+          Not therapy. Not advice. A helpful filter for everyday situations. Use at your own risk.
+        </p>
         <PBtn onClick={()=>go("quiz")} style={{width:"100%",maxWidth:260,padding:"18px 32px",fontSize:16}}>
-          Get started
+          Get started — it's free
         </PBtn>
-        <p style={{fontFamily:D.sans,fontSize:12,color:D.cream3,marginTop:18}}>5 quick questions · ~1 min</p>
+        <p style={{fontFamily:D.sans,fontSize:12,color:D.cream3,marginTop:16}}>5 questions · 5 free filters/day · no sign up</p>
       </div>
     </div>
   );
 }
 
+// ════════════════════════════════════════════════════════
+// QUIZ
+// ════════════════════════════════════════════════════════
 function Quiz(){
   const {completeOnboarding}=useApp();
   const [step,setStep]=useState(0);
@@ -371,10 +602,7 @@ function Quiz(){
       else{completeOnboarding(a);}
     },400);
   };
-  const back=()=>{
-    if(!step)return;
-    anim(-1,()=>{const p=step-1;setStep(p);setSel(answers[QUIZ[p].field]||null);});
-  };
+  const back=()=>{if(!step)return;anim(-1,()=>{const p=step-1;setStep(p);setSel(answers[QUIZ[p].field]||null);});};
   const slide={opacity:animIn?1:0,transform:animIn?"translateX(0)":`translateX(${dir*20}px)`,transition:"opacity .24s ease,transform .24s ease"};
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",position:"relative"}}>
@@ -411,6 +639,9 @@ function Quiz(){
   );
 }
 
+// ════════════════════════════════════════════════════════
+// REVEAL
+// ════════════════════════════════════════════════════════
 function Reveal(){
   const {go,personality}=useApp();
   const arch=ARCHETYPES[personality.archetypeKey]||ARCHETYPES.qualifier;
@@ -451,18 +682,24 @@ function Reveal(){
   );
 }
 
+// ════════════════════════════════════════════════════════
+// MAIN
+// ════════════════════════════════════════════════════════
 function Main(){
-  const {personality,ctx,setCtx,raw,setRaw,generate,reset}=useApp();
+  const {personality,ctx,setCtx,raw,setRaw,generate,reset,usageCount,showPaywall,setShowPaywall}=useApp();
   const arch=personality.completed?ARCHETYPES[personality.archetypeKey]:null;
   const [showP,setShowP]=useState(false);
   const MAX=800;
+  const remaining=Math.max(0,FREE_LIMIT-usageCount);
   const handleFilter=()=>generate(raw,ctx,personality);
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",position:"relative"}}>
+      {showPaywall&&<Paywall/>}
       <Ambient/>
       <div style={{position:"relative",zIndex:2,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"22px 24px 0",flexShrink:0}}>
-        <div style={{fontFamily:D.serif,fontSize:22,fontWeight:300,color:D.cream,letterSpacing:"-0.01em"}}>
+        <div style={{fontFamily:D.serif,fontSize:22,fontWeight:300,color:D.cream,letterSpacing:"-0.01em",display:"flex",alignItems:"center",gap:8}}>
           Clear<em style={{fontStyle:"italic",color:D.accent}}>ly</em>
+          <span style={{fontFamily:D.sans,fontSize:9,color:D.accent,letterSpacing:"0.08em",textTransform:"uppercase",background:`${D.accent}20`,border:`1px solid ${D.accent}40`,borderRadius:8,padding:"2px 6px"}}>BETA</span>
         </div>
         {arch&&(
           <button onClick={()=>setShowP(p=>!p)} style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:20,padding:"6px 14px 6px 10px",display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
@@ -483,80 +720,81 @@ function Main(){
           <button onClick={()=>{setShowP(false);reset();}} style={{marginTop:14,fontFamily:D.sans,fontSize:12,color:D.cream3,background:"none",border:"none",cursor:"pointer",padding:0}}>Retake quiz →</button>
         </div>
       )}
-      <div style={{flex:1,overflowY:"auto",padding:"28px 24px 28px",position:"relative",zIndex:1,display:"flex",flexDirection:"column",scrollbarWidth:"none"}}>
-        <div style={{marginBottom:24}}>
+      <div style={{flex:1,overflowY:"auto",padding:"24px 24px 120px",position:"relative",zIndex:1,display:"flex",flexDirection:"column",scrollbarWidth:"none"}}>
+        <div style={{marginBottom:20}}>
           <h2 style={{fontFamily:D.serif,fontSize:30,fontWeight:300,color:D.cream,lineHeight:1.25,letterSpacing:"-0.01em",marginBottom:6}}>
             What do you<br/>want to <em style={{fontStyle:"italic",color:D.accent}}>say?</em>
           </h2>
           {arch&&<p style={{fontFamily:D.sans,fontSize:13,color:D.cream3}}>We'll filter it for you, {arch.label.toLowerCase()}.</p>}
         </div>
-        <div style={{marginBottom:20}}>
+        <div style={{marginBottom:18}}>
           <p style={{fontFamily:D.sans,fontSize:10,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>Situation</p>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             {CONTEXTS.map(c=>{
               const on=ctx.id===c.id;
-              return(
-                <button key={c.id} onClick={()=>setCtx(c)}
-                  style={{padding:"8px 16px",background:on?D.accent:D.surface,border:`1px solid ${on?D.accent:D.border}`,borderRadius:20,fontFamily:D.sans,fontSize:13,fontWeight:on?500:400,color:on?"#fff":D.cream2,cursor:"pointer",transition:"all .18s"}}>
-                  {c.label}
-                </button>
-              );
+              return <button key={c.id} onClick={()=>setCtx(c)}
+                style={{padding:"8px 16px",background:on?D.accent:D.surface,border:`1px solid ${on?D.accent:D.border}`,borderRadius:20,fontFamily:D.sans,fontSize:13,fontWeight:on?500:400,color:on?"#fff":D.cream2,cursor:"pointer",transition:"all .18s"}}>
+                {c.label}
+              </button>;
             })}
           </div>
           <p style={{fontFamily:D.sans,fontSize:11,color:D.cream3,marginTop:6}}>{ctx.sub}</p>
         </div>
-        <div style={{flex:1,display:"flex",flexDirection:"column",gap:14}}>
-          <textarea
-            value={raw}
-            onChange={e=>setRaw(e.target.value.slice(0,MAX))}
+        <div style={{flex:1,display:"flex",flexDirection:"column",gap:12}}>
+          <textarea value={raw} onChange={e=>setRaw(e.target.value.slice(0,MAX))}
             placeholder={"Just start typing, don't overthink it…\n\nI want to tell my manager the deadline isn't realistic but I don't want to seem difficult and maybe I'm wrong but Sarah also hasn't sent the files and…"}
             style={{flex:1,minHeight:180,background:D.surface,border:`1px solid ${D.border}`,borderRadius:16,padding:"18px 20px",fontFamily:D.sans,fontSize:15,color:D.cream,resize:"none",outline:"none",lineHeight:1.7,transition:"border-color .2s",scrollbarWidth:"none"}}
             onFocus={e=>e.target.style.borderColor=`${D.accent}80`}
             onBlur={e=>e.target.style.borderColor=D.border}
           />
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontFamily:D.sans,fontSize:11,color:D.cream3}}>{raw.length}/{MAX}</span>
-            <PBtn onClick={handleFilter} disabled={!raw.trim()} style={{padding:"14px 28px"}}>Filter it →</PBtn>
+            <div>
+              <span style={{fontFamily:D.sans,fontSize:11,color:D.cream3}}>{raw.length}/{MAX}</span>
+              <span style={{fontFamily:D.sans,fontSize:11,color:remaining<=1?D.accent:D.cream3,marginLeft:10}}>
+                {remaining} filter{remaining!==1?"s":""} left today
+              </span>
+            </div>
+            <PBtn onClick={handleFilter} disabled={!raw.trim()||remaining===0} style={{padding:"13px 24px",fontSize:14}}>
+              Filter it →
+            </PBtn>
           </div>
         </div>
       </div>
+      <BetaBanner/>
     </div>
   );
 }
 
+// ════════════════════════════════════════════════════════
+// OUTPUT
+// ════════════════════════════════════════════════════════
 function Output(){
-  const {go,ctx,raw,result,setResult,loading,genError,generate,personality}=useApp();
+  const {go,ctx,raw,result,setResult,loading,genError,generate,personality,showPaywall}=useApp();
   const [copied,setCopied]=useState(false);
   const arch=personality.completed?ARCHETYPES[personality.archetypeKey]:null;
   const isExit=result?.isExit||false;
-
   const copy=async()=>{
     if(!result?.refined)return;
     try{await navigator.clipboard.writeText(result.refined);setCopied(true);setTimeout(()=>setCopied(false),2200);}catch(_){}
   };
-
   const nextVariation=()=>{
     if(!result?.variations)return;
     const next=(result.currentIndex+1)%result.variations.length;
     const v=result.variations[next];
     setResult({...result,currentIndex:next,...v});
   };
-
   const total=result?.variations?.length||1;
-
   const Dots=()=>(
-    <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:20}}>
+    <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:18}}>
       {Array.from({length:total}).map((_,i)=>(
-        <div key={i} onClick={()=>{
-          const v=result.variations[i];
-          setResult({...result,currentIndex:i,...v});
-        }} style={{width:i===result?.currentIndex?18:6,height:6,borderRadius:3,background:i===result?.currentIndex?(isExit?D.exit:D.accent):D.border,transition:"all .25s",cursor:"pointer"}}/>
+        <div key={i} onClick={()=>{const v=result.variations[i];setResult({...result,currentIndex:i,...v});}}
+          style={{width:i===result?.currentIndex?18:6,height:6,borderRadius:3,background:i===result?.currentIndex?(isExit?D.exit:D.accent):D.border,transition:"all .25s",cursor:"pointer"}}/>
       ))}
     </div>
   );
-
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",position:"relative"}}>
+      {showPaywall&&<Paywall/>}
       <Ambient color={isExit?D.exit:arch?.color||D.accent}/>
       <div style={{position:"relative",zIndex:2,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"22px 24px 0",flexShrink:0}}>
         <button onClick={()=>go("main")} style={{background:"none",border:"none",fontFamily:D.sans,fontSize:13,color:D.cream2,cursor:"pointer",padding:0}}>← Edit</button>
@@ -565,7 +803,6 @@ function Output(){
           <span style={{fontFamily:D.sans,fontSize:11,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.06em"}}>{ctx.label}</span>
         </div>
       </div>
-
       <div style={{flex:1,overflowY:"auto",padding:"20px 24px 36px",position:"relative",zIndex:1,scrollbarWidth:"none"}}>
         {loading&&(
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"70%",gap:16}}>
@@ -573,52 +810,41 @@ function Output(){
             <p style={{fontFamily:D.sans,fontSize:13,color:D.cream3}}>Filtering your thought…</p>
           </div>
         )}
-
         {!loading&&genError&&(
           <div style={{padding:24,background:D.surface,borderRadius:16,border:`1px solid ${D.border}`,marginTop:20}}>
             <p style={{fontFamily:D.sans,fontSize:14,color:"#E08080",lineHeight:1.6,marginBottom:16}}>{genError}</p>
             <GBtn onClick={()=>generate(raw,ctx,personality)}>Try again</GBtn>
           </div>
         )}
-
         {!loading&&!genError&&result&&(
           <div>
             <h2 style={{fontFamily:D.serif,fontSize:26,fontWeight:300,color:D.cream,lineHeight:1.25,letterSpacing:"-0.01em",marginBottom:6}}>
               {isExit?"Here's your escape plan.":<>Here's what to <em style={{fontStyle:"italic",color:D.accent}}>say.</em></>}
             </h2>
-
-            <div style={{display:"inline-flex",alignItems:"center",gap:8,marginBottom:16,marginTop:6}}>
+            <div style={{display:"inline-flex",alignItems:"center",gap:8,marginBottom:14,marginTop:6}}>
               <div style={{width:6,height:6,borderRadius:"50%",background:isExit?D.exit:"#6BBF8E"}}/>
               <span style={{fontFamily:D.sans,fontSize:12,color:D.cream3}}>{result.toneLabel}</span>
             </div>
-
             <Dots/>
-
-            <div style={{background:isExit?D.exitLight:`linear-gradient(135deg,${D.surface} 0%,${D.surf2} 100%)`,border:`1px solid ${isExit?D.exit+"40":D.accent+"40"}`,borderRadius:18,padding:"22px 20px",marginBottom:14,boxShadow:`0 4px 24px ${isExit?D.exit:D.accent}15`}}>
-              <p style={{fontFamily:D.sans,fontSize:10,color:isExit?D.exit:D.cream3,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>
+            <div style={{background:isExit?D.exitLight:`linear-gradient(135deg,${D.surface} 0%,${D.surf2} 100%)`,border:`1px solid ${isExit?D.exit+"40":D.accent+"40"}`,borderRadius:18,padding:"20px 18px",marginBottom:12,boxShadow:`0 4px 24px ${isExit?D.exit:D.accent}15`}}>
+              <p style={{fontFamily:D.sans,fontSize:10,color:isExit?D.exit:D.cream3,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>
                 {isExit?"Your exit line":"Filtered version"}
               </p>
               <p style={{fontFamily:D.sans,fontSize:15,color:D.cream,lineHeight:1.8,whiteSpace:"pre-wrap"}}>{result.refined}</p>
             </div>
-
-            {result.explanation&&(
-              <p style={{fontFamily:D.sans,fontSize:13,color:D.cream3,lineHeight:1.6,marginBottom:18,fontStyle:"italic"}}>✦ {result.explanation}</p>
-            )}
-
-            <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:14,padding:"14px 18px",marginBottom:20}}>
-              <p style={{fontFamily:D.sans,fontSize:10,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}}>Your original</p>
+            {result.explanation&&<p style={{fontFamily:D.sans,fontSize:13,color:D.cream3,lineHeight:1.6,marginBottom:16,fontStyle:"italic"}}>✦ {result.explanation}</p>}
+            <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:14,padding:"14px 18px",marginBottom:18}}>
+              <p style={{fontFamily:D.sans,fontSize:10,color:D.cream3,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Your original</p>
               <p style={{fontFamily:D.sans,fontSize:13,color:D.cream3,lineHeight:1.65,fontStyle:"italic"}}>{raw}</p>
             </div>
-
-            <div style={{display:"flex",gap:10,marginBottom:16}}>
-              <PBtn onClick={copy} style={{flex:1,padding:"14px 16px",background:isExit?D.exit:undefined}}>
+            <div style={{display:"flex",gap:10,marginBottom:14}}>
+              <PBtn onClick={copy} style={{flex:1,padding:"13px 16px",background:isExit?D.exit:undefined}}>
                 {copied?"Copied ✓":"Copy"}
               </PBtn>
-              <GBtn onClick={nextVariation} style={{flex:1,padding:"14px 16px"}}>
+              <GBtn onClick={nextVariation} style={{flex:1,padding:"13px 16px"}}>
                 Next {isExit?"escape":"version"} →
               </GBtn>
             </div>
-
             <div style={{textAlign:"center"}}>
               <button onClick={()=>go("main")} style={{background:"none",border:"none",fontFamily:D.sans,fontSize:13,color:D.cream3,cursor:"pointer"}}>
                 Start over
@@ -631,17 +857,22 @@ function Output(){
   );
 }
 
+// ════════════════════════════════════════════════════════
+// SHELL + APP
+// ════════════════════════════════════════════════════════
 function Shell(){
   const {screen}=useApp();
-  const map={splash:<Splash/>,quiz:<Quiz/>,reveal:<Reveal/>,main:<Main/>,output:<Output/>};
+  const map={gate:<AgeGate/>,tos:<ToSScreen/>,splash:<Splash/>,quiz:<Quiz/>,reveal:<Reveal/>,main:<Main/>,output:<Output/>};
   return(
     <div style={{width:"100%",height:"100%",background:D.bg,position:"relative",overflow:"hidden"}}>
       <style>{`
         @keyframes pulse{0%,100%{opacity:.6;transform:translate(-50%,-50%) scale(1)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.07)}}
         @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
         *{box-sizing:border-box;}
-        textarea{scrollbar-width:none;}
+        textarea,input{scrollbar-width:none;}
         textarea::placeholder{color:#6B6259;font-style:italic;}
+        input::placeholder{color:#6B6259;}
         ::-webkit-scrollbar{display:none;}
         button{-webkit-tap-highlight-color:transparent;}
       `}</style>
@@ -657,11 +888,7 @@ function Shell(){
 function App(){
   const isMobile=window.innerWidth<=500;
   if(isMobile){
-    return(
-      <div style={{height:"100vh",width:"100vw",background:D.bg}}>
-        <AppProvider><Shell/></AppProvider>
-      </div>
-    );
+    return <div style={{height:"100vh",width:"100vw",background:D.bg}}><AppProvider><Shell/></AppProvider></div>;
   }
   return(
     <div style={{minHeight:"100vh",background:"#1A1612",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
