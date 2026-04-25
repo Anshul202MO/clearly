@@ -24,11 +24,12 @@ textarea::placeholder{color:#6B6259;font-style:italic;}
 const {useState,useContext,createContext,useEffect,useCallback}=React;
 
 // =============================================
-// STEP 1 — PASTE YOUR NVIDIA API KEY BELOW
-// Get it free at: build.nvidia.com
-// It starts with: nvapi-
+// STEP 1 — PASTE YOUR GROQ API KEY BELOW
+// Get it free at: console.groq.com
+// No credit card needed
+// It starts with: gsk_
 // =============================================
-const NVIDIA_KEY = "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";
+const GROQ_KEY = "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";
 // =============================================
 
 const CONTEXTS=[
@@ -136,8 +137,8 @@ function AppProvider({children}){
     setLoading(true);
     setScreen("output");
     try{
-      if(!NVIDIA_KEY||NVIDIA_KEY===""){
-        setGenError("No API key found. Open index.html on GitHub, find the line NVIDIA_KEY = \"\" and paste your key between the quotes.");
+      if(!GROQ_KEY||GROQ_KEY===""){
+        setGenError("No API key found. Open index.html on GitHub, find the line GROQ_KEY = \"\" and paste your Groq key between the quotes. Get a free key at console.groq.com");
         return;
       }
 
@@ -165,14 +166,14 @@ function AppProvider({children}){
         '{"refined":"the complete rewritten message","toneLabel":"Word · Word · Word","explanation":"one sentence: what you changed and why"}',
       ].join("\n");
 
-      const res=await fetch("https://integrate.api.nvidia.com/v1/chat/completions",{
+      const res=await fetch("https://api.groq.com/openai/v1/chat/completions",{
         method:"POST",
         headers:{
           "Content-Type":"application/json",
-          "Authorization":`Bearer ${NVIDIA_KEY}`,
+          "Authorization":`Bearer ${GROQ_KEY}`,
         },
         body:JSON.stringify({
-          model:"meta/llama-3.1-70b-instruct",
+          model:"llama-3.3-70b-versatile",
           messages:[
             {role:"system",content:systemPrompt},
             {role:"user",content:currentRaw},
@@ -183,10 +184,10 @@ function AppProvider({children}){
       });
 
       const data=await res.json();
-      if(data.error)throw new Error(data.error.message||"Nvidia API error");
+      if(data.error)throw new Error(data.error.message||"Groq API error");
 
       const text=data.choices?.[0]?.message?.content||"";
-      if(!text)throw new Error("Empty response from Nvidia");
+      if(!text)throw new Error("Empty response from Groq");
 
       const clean=text.replace(/```json|```/g,"").trim();
       const parsed=JSON.parse(clean);
@@ -200,7 +201,7 @@ function AppProvider({children}){
       });
 
     }catch(e){
-      setGenError("Something went wrong: "+(e.message||"check your Nvidia key and try again."));
+      setGenError("Something went wrong: "+(e.message||"check your Groq key and try again."));
       console.error(e);
     }finally{
       setLoading(false);
